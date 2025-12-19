@@ -28,28 +28,32 @@ const vocabDatabase = [
     {id: 13, w: "median", d: "A narrow strip of land between two sides of a large road, separating the vehicles moving in opposite directions", u: 7},
     // 14
     {id: 14, w: "to rotate", d: "To turn around", u: 7},
-    
-    // UNIT 7/8: UI & Legal
     // 15
     {id: 15, w: "dark pattern", d: "Describing a user interface feature designed to trick users into doing something more beneficial to the company over the user", u: 7},
     // 16
     {id: 16, w: "terms of service", d: "A contract or agreement made between a company and the end-user using the product", u: 7},
     // 17
-    {id: 17, w: "copyright", d: "A protection for any published work that helps to prevent that work from being used without prior authorization", u: 8},
+    {id: 17, w: "copyright", d: "A protection for any published work that helps to prevent that work from being used without prior authorization", u: 7
+    },
     // 18
-    {id: 18, w: "digital footprint", d: "Alternatively known as digital exhaust, describes activities that can be tracked when an individual uses the Internet", u: 8},
-    
-    // UNIT 8: Censorship & Malware
+    {id: 18, w: "digital footprint", d: "Alternatively known as digital exhaust, describes activities that can be tracked when an individual uses the Internet", u: 7
+    },
     // 19
-    {id: 19, w: "malicious software", d: "This kind of software or computer programs are designed to damage other people's computers", u: 8},
+    {id: 19, w: "malicious software", d: "This kind of software or computer programs are designed to damage other people's computers", u: 7
+    },
     // 20
-    {id: 20, w: "spyware", d: "Software that collects information about how someone uses the Internet without the user being aware of it", u: 8},
+    {id: 20, w: "spyware", d: "Software that collects information about how someone uses the Internet without the user being aware of it", u: 7
+    },
     // 21
-    {id: 21, w: "trojan horse", d: "A seemingly harmless computer program that has been deliberately designed to breach the security of a computer system", u: 8},
+    {id: 21, w: "trojan horse", d: "A seemingly harmless computer program that has been deliberately designed to breach the security of a computer system", u: 7
+    },
     // 22
-    {id: 22, w: "ransomware", d: "This disables the victim's access to data until ransom is paid", u: 8},
+    {id: 22, w: "ransomware", d: "This disables the victim's access to data until ransom is paid", u: 7
+    },
     // 23
-    {id: 23, w: "adware", d: "Software that automatically displays or downloads (unwanted) advertisements to a user", u: 8},
+    {id: 23, w: "adware", d: "Software that automatically displays or downloads (unwanted) advertisements to a user", u: 7
+    },
+    // UNIT 8: Censorship & Malware
     // 24
     {id: 24, w: "to spur", d: "To encourage an activity", u: 8},
     // 25
@@ -166,10 +170,10 @@ const vocabDatabase = [
     {id: 79, w: "information superhighway", d: "The internet and other systems that allow people to share information electronically", u: 9},
     // 80
     {id: 80, w: "cybersquatting", d: "Purchasing a domain which is identical to other trademarks/brands and holding it for resale", u: 9},
-    // 81
-    {id: 81, w: "to extend", d: "To cover or reach into", u: 9},
     
     // UNIT 10: Surveillance & Rights
+    // 81
+    {id: 81, w: "to extend", d: "To cover or reach into", u: 10},
     // 82
     {id: 82, w: "surveillance", d: "The careful watching of a person or place, especially by authority", u: 10},
     // 83
