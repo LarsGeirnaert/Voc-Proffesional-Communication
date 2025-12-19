@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="style.css">
     <script src="vocab_data.js"></script> 
 </head>
-<body> 
+<body>
 
     <div class="dashboard">
         <div class="cat-btn new" onclick="showList(0)">
@@ -64,8 +64,15 @@
         </div>
 
         <div class="controls" id="game-controls" style="display:none;">
-            <button class="btn btn-pass" onclick="passWord()">PASS (-3s)</button>
+            <button class="btn btn-pass" onclick="passWord()">PASS (Overslaan)</button>
             <button class="btn btn-stop" onclick="stopGame()">STOP & OPSLAAN</button>
+        </div>
+        
+        <div class="toggle-container" id="timer-toggle-div">
+            <label class="toggle-label">
+                <input type="checkbox" id="timer-check" checked>
+                <span>Speel met Tijdslimiet</span>
+            </label>
         </div>
         
         <button class="btn btn-start" id="start-btn" onclick="startGame()">START GAME</button>
@@ -107,6 +114,7 @@
     const START_TIME = 25.0; 
     const VISUAL_MAX_TIME = 60.0; 
     let timer = START_TIME; 
+    let timerEnabled = true; // Nieuwe variabele
     
     let gameInterval;
     let isPlaying = false;
@@ -137,7 +145,11 @@
             return;
         }
 
+        // Check of timer aan moet staan
+        timerEnabled = document.getElementById('timer-check').checked;
+
         document.getElementById('start-btn').style.display = 'none';
+        document.getElementById('timer-toggle-div').style.display = 'none'; // Verberg checkbox tijdens spel
         document.getElementById('game-controls').style.display = 'flex';
         const input = document.getElementById('answer-input');
         input.disabled = false;
@@ -148,6 +160,14 @@
         timer = START_TIME;
         isPlaying = true;
         document.getElementById('score').innerText = score;
+
+        // Als timer uit is, zet UI op oneindig
+        if (!timerEnabled) {
+            document.getElementById('timer').innerText = "∞";
+            document.getElementById('timer').style.color = "var(--accent)";
+            document.getElementById('visual-timer').style.width = "100%";
+            document.getElementById('visual-timer').className = "timer-fill safe";
+        }
 
         nextWord();
         gameInterval = setInterval(gameLoop, 100);
@@ -164,36 +184,40 @@
 
     function gameLoop() {
         if (!isPlaying) return;
-        timer -= 0.1;
         
-        const timerEl = document.getElementById('timer');
-        timerEl.innerText = timer.toFixed(1) + 's';
+        // Alleen timer aftellen als het aan staat
+        if (timerEnabled) {
+            timer -= 0.1;
+            
+            const timerEl = document.getElementById('timer');
+            timerEl.innerText = timer.toFixed(1) + 's';
 
-        // Visual Bar Update
-        const bar = document.getElementById('visual-timer');
-        let pct = (timer / VISUAL_MAX_TIME) * 100;
-        if (pct > 100) pct = 100; 
-        if (pct < 0) pct = 0;
-        bar.style.width = pct + "%";
+            // --- UPDATE VISUAL BAR ---
+            const bar = document.getElementById('visual-timer');
+            let pct = (timer / VISUAL_MAX_TIME) * 100;
+            if (pct > 100) pct = 100; 
+            if (pct < 0) pct = 0;
+            bar.style.width = pct + "%";
 
-        // Kleuren
-        bar.className = "timer-fill"; 
-        timerEl.style.color = "var(--accent)"; 
+            // Kleuren logica
+            bar.className = "timer-fill"; 
+            timerEl.style.color = "var(--accent)"; 
 
-        if (timer <= 10) {
-            bar.classList.add('danger');
-            timerEl.style.color = "var(--c-bad)";
-        } else if (timer >= 50) { 
-            bar.classList.add('max');
-            timerEl.style.color = "var(--max)";
-        } else if (timer > 30) {
-            bar.classList.add('overdrive');
-             timerEl.style.color = "var(--overdrive)";
-        } else {
-            bar.classList.add('safe');
+            if (timer <= 10) {
+                bar.classList.add('danger');
+                timerEl.style.color = "var(--c-bad)";
+            } else if (timer >= 50) { 
+                bar.classList.add('max');
+                timerEl.style.color = "var(--max)";
+            } else if (timer > 30) {
+                bar.classList.add('overdrive');
+                 timerEl.style.color = "var(--overdrive)";
+            } else {
+                bar.classList.add('safe');
+            }
+
+            if (timer <= 0) gameOver();
         }
-
-        if (timer <= 0) gameOver();
     }
 
     function nextWord() {
@@ -234,8 +258,13 @@
         progressMap[currentItem.w] = currentLevel;
         saveProgress();
 
-        timer += 10;
-        if (timer > VISUAL_MAX_TIME) timer = VISUAL_MAX_TIME;
+        // Alleen bonus tijd als timer aan staat
+        if (timerEnabled) {
+            timer += 10;
+            if (timer > VISUAL_MAX_TIME) {
+                timer = VISUAL_MAX_TIME;
+            }
+        }
         
         score++;
         document.getElementById('score').innerText = score;
@@ -250,7 +279,11 @@
     function passWord() {
         if (!isPlaying) return;
         
-        timer -= 3;
+        // Alleen straf als timer aan staat
+        if (timerEnabled) {
+            timer -= 3;
+        }
+
         const inputEl = document.getElementById('answer-input');
         inputEl.classList.add('flash-red');
         inputEl.value = "Antwoord: " + currentItem.w; 
@@ -285,11 +318,11 @@
     function endGameVictory() {
         isPlaying = false;
         clearInterval(gameInterval);
-        alert("Sessie voltooid! Goed gewerkt.");
+        alert("GEWELDIG! Je hebt alle woorden naar 'Volledig Gekend' gespeeld!");
         location.reload();
     }
 
-    // --- 3. STORAGE, STATS & RESET ---
+    // --- 3. STORAGE & STATS ---
 
     function saveProgress() {
         localStorage.setItem('vocab_progress_v2', JSON.stringify(progressMap));
@@ -330,7 +363,13 @@
         document.getElementById('mastery-pct').innerText = pct + "%";
     }
 
-    // --- BUTTON ACTIONS ---
+    function resetProgress() {
+        if(confirm("Weet je zeker dat je alle voortgang wilt wissen?")) {
+            localStorage.removeItem('vocab_progress_v2');
+            localStorage.removeItem('vocab_starred');
+            location.reload();
+        }
+    }
 
     function resetStarredToNew() {
         const starredKeys = Object.keys(starredMap);
@@ -338,7 +377,6 @@
             alert("Je hebt geen woorden met een ster ★.");
             return;
         }
-
         if(confirm(`Wil je de progressie van ${starredKeys.length} woorden met ★ resetten naar 'Niet Gekend'?`)) {
             starredKeys.forEach(word => {
                 progressMap[word] = 0;
@@ -354,14 +392,6 @@
             localStorage.removeItem('vocab_starred');
             refreshStats();
             alert("Alle sterren verwijderd.");
-        }
-    }
-
-    function resetProgress() {
-        if(confirm("LET OP: Wil je echt ALLES wissen? Alle progressie en sterren gaan verloren.")) {
-            localStorage.removeItem('vocab_progress_v2');
-            localStorage.removeItem('vocab_starred');
-            location.reload();
         }
     }
 
@@ -452,4 +482,4 @@
 
 </script>
 </body>
-</html> 
+</html>

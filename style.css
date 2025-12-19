@@ -9,7 +9,7 @@
     --c-bad: #ef4444;    /* Red */
     --c-good: #eab308;   /* Yellow/Gold */
     --c-full: #22c55e;   /* Green */
-    --c-star: #f59e0b;   /* Orange/Star color */ 
+    --c-star: #f59e0b;   /* Orange/Star color */
     
     --accent: #3b82f6;   /* Blue */
     --overdrive: #a855f7; /* Purple */
@@ -93,6 +93,17 @@ body {
 .timer-fill.overdrive { background: var(--overdrive); box-shadow: 0 0 5px var(--overdrive); }
 .timer-fill.max { background: var(--max); box-shadow: 0 0 15px var(--max); }
 
+/* NIEUW: TOGGLE VOOR TIJD */
+.toggle-container {
+    margin-bottom: 15px; display: flex; justify-content: center; align-items: center;
+}
+.toggle-label {
+    cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 1rem; color: var(--text);
+}
+.toggle-label input {
+    width: 20px; height: 20px; accent-color: var(--accent); cursor: pointer; margin: 0;
+}
+
 .hud {
     display: flex; justify-content: space-between; align-items: center;
     margin-bottom: 5px; font-size: 1.2rem; font-weight: bold;
@@ -108,13 +119,13 @@ body {
 /* --- INPUTS & CONTROLS --- */
 .input-group { position: relative; margin-bottom: 20px; }
 
-input {
+input[type="text"] {
     width: 100%; padding: 15px; font-size: 1.3rem; border-radius: 8px;
     border: 2px solid var(--border); background: #121212; color: white;
     outline: none; text-align: center; box-sizing: border-box;
     transition: border-color 0.3s;
 }
-input:focus { border-color: var(--accent); }
+input[type="text"]:focus { border-color: var(--accent); }
 
 .controls { display: flex; gap: 10px; margin-bottom: 10px; }
 
