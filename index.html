@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VOCAB MASTER: DUO MODE</title>
+    <title>VOCAB MASTER: ULTIMATE</title>
     <link rel="stylesheet" href="style.css">
     <script src="vocab_data.js"></script> 
 </head>
 <body>
+    <canvas id="confetti-canvas"></canvas>
 
     <div class="dashboard">
         <div class="cat-btn new" onclick="showList(0)">
@@ -33,7 +34,6 @@
     </div>
 
     <div class="game-container" id="game-ui">
-        
         <div class="progress-section">
             <div class="progress-label">
                 <span>TOTALE PROGRESSIE</span>
@@ -68,11 +68,19 @@
         </div>
 
         <div class="fc-controls" id="fc-controls" style="display:none;">
-             <button class="btn btn-fc-bad" onclick="handleFlashcardResult(false)">❌ Nog niet</button>
-             <button class="btn btn-fc-good" onclick="handleFlashcardResult(true)">✅ Ik wist hem</button>
+             <button id="btn-show-answer" class="btn btn-show" onclick="revealFlashcard()">Toon Antwoord (Spatie)</button>
+             
+             <div id="fc-rating-btns" class="fc-rating-row" style="display:none;">
+                 <button class="btn btn-fc-bad" onclick="handleFlashcardResult(false)">[1] ❌ Nog niet</button>
+                 <button class="btn btn-fc-good" onclick="handleFlashcardResult(true)">[2] ✅ Ik wist hem</button>
+             </div>
         </div>
+
         <div class="controls" id="fc-stop-controls" style="display:none;">
              <button class="btn btn-stop" onclick="stopGame()">STOP</button>
+             <div style="text-align:center; width:100%; font-size:0.8rem; color:#666; margin-top:5px;">
+                Spatie = Toon | 1/Links = Fout | 2/Rechts = Goed
+             </div>
         </div>
         
         <div class="settings-row" id="settings-div">
@@ -100,11 +108,16 @@
 
     <div class="reset-container">
         <div class="reset-row">
+            <button class="btn-reset data-btn" onclick="exportData()">💾 Backup Opslaan</button>
+            <button class="btn-reset data-btn" onclick="document.getElementById('import-file').click()">📂 Backup Laden</button>
+            <input type="file" id="import-file" style="display:none" onchange="importData(this)">
+        </div>
+        <div class="reset-row" style="margin-top:10px;">
             <button class="btn-reset neutral" onclick="resetSpecificUnit()">Reset Unit...</button>
             <button class="btn-reset star-reset" onclick="resetStarredToNew()">Reset ★</button>
             <button class="btn-reset neutral" onclick="unstarAll()">Verwijder ★</button>
         </div>
-        <button class="btn-reset danger" onclick="resetProgress()">⚠ RESET ALLES (Totaal)</button>
+        <button class="btn-reset danger" onclick="resetProgress()">⚠ RESET ALLES</button>
     </div>
 
     <div class="modal" id="list-modal">
@@ -133,7 +146,11 @@
     let timer = START_TIME; 
     let timerEnabled = true; 
     let currentMode = 'overdrive'; 
-    let isFlipped = false; // Voor flashcards
+    
+    // Flashcard specifieke state
+    let isFlipped = false; 
+    let isRevealed = false; // Is het antwoord zichtbaar?
+    let isProcessing = false; // Voorkomt dubbelklik
     
     let gameInterval;
     let isPlaying = false;
@@ -156,16 +173,31 @@
         document.getElementById('definition-area').style.color = "red";
     }
 
-    // --- UI FUNCTIES ---
+    // --- KEYBOARD SHORTCUTS ---
+        document.addEventListener('keydown', (e) => {
+            // Check: Spel moet bezig zijn, Flashcard mode, en geen animatie bezig
+            if (!isPlaying || currentMode !== 'flashcards' || isProcessing) return;
 
+            // FASE 1: Kaart is nog dicht?
+            // -> ELKE toets maakt hem open (Any key)
+            if (!isRevealed) {
+                e.preventDefault(); // Voorkomt scrollen als je bijv. pijltje omlaag drukt
+                revealFlashcard();
+                return; // Stop hier, zodat je niet per ongeluk meteen ook een score indrukt
+            }
+
+            // FASE 2: Kaart is open?
+            // -> Nu luisteren we pas naar specifiek 1/Links of 2/Rechts
+            if (e.key === '1' || e.key === 'ArrowLeft') handleFlashcardResult(false);
+            if (e.key === '2' || e.key === 'ArrowRight') handleFlashcardResult(true);
+        });
+
+    // --- UI FUNCTIES ---
     function toggleSettingsUI() {
         const mode = document.getElementById('mode-select').value;
         const timerLabel = document.getElementById('timer-toggle-label');
-        if (mode === 'flashcards') {
-            timerLabel.style.display = 'none';
-        } else {
-            timerLabel.style.display = 'flex';
-        }
+        if (mode === 'flashcards') timerLabel.style.display = 'none';
+        else timerLabel.style.display = 'flex';
     }
 
     function populateUnitDropdown() {
@@ -179,7 +211,6 @@
             const unitWords = vocabDatabase.filter(w => w.u === unit);
             const total = unitWords.length;
             const mastered = unitWords.filter(w => (progressMap[w.w] || 0) === 2).length;
-            
             if (total > 0 && total === mastered) {
                 option.innerText = `Unit ${unit} (VOLTOOID)`;
                 option.disabled = true; 
@@ -188,74 +219,80 @@
             }
             select.appendChild(option);
         });
-
         const savedUnit = localStorage.getItem('vocab_last_unit');
         if (savedUnit) {
             const opt = select.querySelector(`option[value="${savedUnit}"]`);
             if (opt && !opt.disabled) select.value = savedUnit;
         }
     }
-
-    function saveUnitSelection() {
-        localStorage.setItem('vocab_last_unit', document.getElementById('unit-select').value);
-    }
+    function saveUnitSelection() { localStorage.setItem('vocab_last_unit', document.getElementById('unit-select').value); }
 
     function resetSpecificUnit() {
-        const unitInput = prompt("Welke Unit wil je resetten? (Typ nummer)");
+        const unitInput = prompt("Welke Unit resetten? (Typ nummer)");
         if (!unitInput) return;
         const targetUnit = parseInt(unitInput);
-        
         const validUnits = [...new Set(vocabDatabase.map(i => i.u))];
         if (!validUnits.includes(targetUnit)) { alert("Ongeldige Unit."); return; }
-
         if(confirm(`Unit ${targetUnit} resetten?`)) {
-            vocabDatabase.forEach(item => {
-                if (item.u === targetUnit) progressMap[item.w] = 0;
-            });
+            vocabDatabase.forEach(item => { if (item.u === targetUnit) progressMap[item.w] = 0; });
             saveProgress(); populateUnitDropdown(); 
             alert(`Unit ${targetUnit} is gereset.`);
         }
+    }
+
+    // --- BACKUP ---
+    function exportData() {
+        const data = { progress: progressMap, starred: starredMap, date: new Date().toISOString() };
+        const blob = new Blob([JSON.stringify(data, null, 2)], {type: "application/json"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a"); a.href = url; a.download = "vocab_save.json";
+        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    }
+    function importData(input) {
+        const file = input.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const data = JSON.parse(e.target.result);
+                if (data.progress && data.starred) {
+                    progressMap = data.progress; starredMap = data.starred;
+                    saveProgress(); alert("Backup succesvol ingeladen!"); location.reload();
+                } else alert("Ongeldig bestand.");
+            } catch (err) { alert("Fout bij lezen bestand."); }
+        }; reader.readAsText(file);
     }
 
     // --- 2. GAME LOGIC ---
 
     function startGame() {
         buildQueue();
-        if(activeQueue.length === 0) {
-            alert("Deze selectie is al volledig gekend!"); return;
-        }
+        if(activeQueue.length === 0) { alert("Deze selectie is al volledig gekend!"); return; }
 
         currentMode = document.getElementById('mode-select').value;
         timerEnabled = document.getElementById('timer-check').checked;
-        lastWord = null; 
-        score = 0;
-        timer = START_TIME;
-        isPlaying = true;
+        lastWord = null; score = 0; timer = START_TIME;
+        isPlaying = true; isProcessing = false; isRevealed = false;
         document.getElementById('score').innerText = score;
 
-        // UI Setup
         document.getElementById('start-btn').style.display = 'none';
         document.getElementById('settings-div').style.display = 'none'; 
         
         if (currentMode === 'flashcards') {
             document.getElementById('input-area').style.display = 'none';
             document.getElementById('game-controls').style.display = 'none';
-            document.getElementById('fc-controls').style.display = 'flex';
-            document.getElementById('fc-stop-controls').style.display = 'flex';
+            document.getElementById('fc-controls').style.display = 'flex'; // Toon container
+            document.getElementById('fc-stop-controls').style.display = 'block'; 
             document.getElementById('timer-container-div').style.display = 'none';
             document.getElementById('timer').style.opacity = '0'; 
         } else {
-            // Overdrive (Typen)
             document.getElementById('input-area').style.display = 'block';
             document.getElementById('game-controls').style.display = 'flex';
             document.getElementById('fc-controls').style.display = 'none';
             document.getElementById('fc-stop-controls').style.display = 'none';
             document.getElementById('timer-container-div').style.display = 'block';
             document.getElementById('timer').style.opacity = '1';
-            
             const input = document.getElementById('answer-input');
             input.disabled = false; input.value = ""; input.focus();
-            
             if (!timerEnabled) {
                 document.getElementById('timer').innerText = "∞";
                 document.getElementById('timer').style.color = "var(--accent)";
@@ -263,13 +300,8 @@
                 document.getElementById('visual-timer').className = "timer-fill safe";
             }
         }
-
         nextWord();
-        
-        // Start timer alleen als niet flashcards en enabled
-        if (currentMode !== 'flashcards') {
-            gameInterval = setInterval(gameLoop, 100);
-        }
+        if (currentMode !== 'flashcards') gameInterval = setInterval(gameLoop, 100);
     }
 
     function buildQueue() {
@@ -288,18 +320,15 @@
             timer -= 0.1;
             const timerEl = document.getElementById('timer');
             timerEl.innerText = timer.toFixed(1) + 's';
-            
             const bar = document.getElementById('visual-timer');
             let pct = (timer / VISUAL_MAX_TIME) * 100;
             if (pct > 100) pct = 100; if (pct < 0) pct = 0;
             bar.style.width = pct + "%";
             bar.className = "timer-fill"; timerEl.style.color = "var(--accent)"; 
-
             if (timer <= 10) { bar.classList.add('danger'); timerEl.style.color = "var(--c-bad)"; } 
             else if (timer >= 50) { bar.classList.add('max'); timerEl.style.color = "var(--max)"; } 
             else if (timer > 30) { bar.classList.add('overdrive'); timerEl.style.color = "var(--overdrive)"; } 
             else { bar.classList.add('safe'); }
-
             if (timer <= 0) gameOver();
         }
     }
@@ -307,7 +336,6 @@
     function nextWord() {
         if (activeQueue.length === 0) { endGameVictory(); return; }
 
-        // Review Logica (5%)
         let totalMastered = 0;
         vocabDatabase.forEach(i => { if((progressMap[i.w]||0)===2) totalMastered++; });
         const masteryRatio = totalMastered / vocabDatabase.length;
@@ -320,7 +348,6 @@
                 isReviewWord = true; 
             }
         }
-
         if (!isReviewWord) {
             let candidates = [...activeQueue];
             if (candidates.length > 1 && lastWord) candidates = candidates.filter(w => w.w !== lastWord.w);
@@ -328,86 +355,139 @@
         }
         lastWord = currentItem; 
         
+        // Reset Flashcard State voor nieuw woord
+        isRevealed = false;
+        
+        // UI Resetten
+        document.getElementById('btn-show-answer').style.display = 'block';
+        document.getElementById('fc-rating-btns').style.display = 'none';
+
         renderGameUI();
     }
 
     function renderGameUI() {
         const area = document.getElementById('definition-area');
-        
+        area.classList.remove('fc-feedback-good', 'fc-feedback-bad');
+
         if (currentMode === 'flashcards') {
             isFlipped = false;
-            // Bouw de 3D card structuur
+            // De kaart begint NIET geflipped
             area.innerHTML = `
-                <div class="flashcard-content" onclick="this.classList.toggle('flipped'); isFlipped = !isFlipped;">
-                    <div class="fc-face fc-front">
-                        ${currentItem.d}
-                    </div>
-                    <div class="fc-face fc-back">
-                        ${currentItem.w}
-                    </div>
+                <div class="flashcard-content" onclick="if(!isRevealed) revealFlashcard()">
+                    <div class="fc-face fc-front">${currentItem.d}</div>
+                    <div class="fc-face fc-back">${currentItem.w}</div>
                 </div>
             `;
         } else {
-            // Overdrive (Standaard)
             area.innerHTML = currentItem.d;
             document.getElementById('answer-input').value = "";
         }
     }
 
-    // --- INPUT HANDLING (Overdrive) ---
-    document.getElementById('answer-input').addEventListener('input', (e) => {
-        if (!isPlaying) return;
-        if (currentMode === 'flashcards') return;
+    // --- NIEUWE FUNCTIE: REVEAL ---
+    function revealFlashcard() {
+        if (!isPlaying || isRevealed) return;
         
+        // Flip de kaart
+        const card = document.querySelector('.flashcard-content');
+        if (card) card.classList.add('flipped');
+        
+        // Update UI Knoppen
+        document.getElementById('btn-show-answer').style.display = 'none';
+        document.getElementById('fc-rating-btns').style.display = 'flex';
+        
+        isRevealed = true;
+    }
+
+    document.getElementById('answer-input').addEventListener('input', (e) => {
+        if (!isPlaying || currentMode === 'flashcards') return;
         const val = e.target.value.trim().toLowerCase();
         const correct = currentItem.w.toLowerCase();
         if (val === correct) handleCorrect();
     });
 
-    // --- FLASHCARD HANDLING ---
     window.handleFlashcardResult = function(success) {
-        if (!isPlaying) return;
-        if (success) {
-            handleCorrect(); 
-        } else {
-            passWord(); 
-        }
+        if (!isPlaying || isProcessing) return;
+        isProcessing = true; // Lock
+
+        // Visuele feedback op de rand
+        const area = document.getElementById('definition-area');
+        if (success) area.classList.add('fc-feedback-good');
+        else area.classList.add('fc-feedback-bad');
+
+        // Even wachten zodat gebruiker de rand ziet, dan next
+        setTimeout(() => {
+            if (success) handleCorrect(true);
+            else passWord(true);
+            isProcessing = false; // Unlock
+        }, 500); // 0.5s is genoeg voor confirmatie
     }
 
-    function handleCorrect() {
-        // Flash visual
-        if (currentMode !== 'flashcards') {
+    function handleCorrect(skipVisuals = false) {
+        if (currentMode !== 'flashcards' && !skipVisuals) {
             const inputEl = document.getElementById('answer-input');
             inputEl.classList.add('flash-green');
             setTimeout(() => inputEl.classList.remove('flash-green'), 300);
-        } else {
-            document.getElementById('definition-area').style.borderColor = "var(--c-full)";
-            setTimeout(() => document.getElementById('definition-area').style.borderColor = "", 300);
         }
 
         if (!isReviewWord) {
             let lvl = progressMap[currentItem.w] || 0;
             lvl = (lvl===-1)?1:(lvl===0)?1:2;
             progressMap[currentItem.w] = lvl; 
+            if (lvl === 2) {
+                checkUnitCompletion(currentItem.u);
+                activeQueue = activeQueue.filter(i=>i.w!==currentItem.w);
+            }
             saveProgress();
-            if(lvl===2) activeQueue = activeQueue.filter(i=>i.w!==currentItem.w);
         }
 
         if (timerEnabled && currentMode !== 'flashcards') {
             timer = Math.min(timer + 10, VISUAL_MAX_TIME);
         }
-        
         score++;
         document.getElementById('score').innerText = score;
         nextWord();
     }
+    
+    function checkUnitCompletion(unitId) {
+        const unitWords = vocabDatabase.filter(w => w.u === unitId);
+        const total = unitWords.length;
+        const mastered = unitWords.filter(w => (progressMap[w.w] || 0) === 2).length;
+        if (total > 0 && total === mastered) fireConfetti();
+    }
 
-    function passWord() {
+    function fireConfetti() {
+        const canvas = document.getElementById('confetti-canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+        let particles = [];
+        const colors = ['#eab308', '#22c55e', '#3b82f6', '#ef4444', '#a855f7'];
+        for(let i=0; i<150; i++) {
+            particles.push({
+                x: window.innerWidth / 2, y: window.innerHeight / 2,
+                w: Math.random() * 10 + 5, h: Math.random() * 10 + 5,
+                vx: (Math.random() - 0.5) * 20, vy: (Math.random() - 0.5) * 20 - 5,
+                color: colors[Math.floor(Math.random() * colors.length)], grav: 0.1, drag: 0.96
+            });
+        }
+        function animate() {
+            ctx.clearRect(0,0,canvas.width,canvas.height);
+            let active = false;
+            particles.forEach(p => {
+                p.x += p.vx; p.y += p.vy; p.vy += p.grav; p.vx *= p.drag; p.vy *= p.drag;
+                ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, p.w, p.h);
+                if (p.y < canvas.height) active = true;
+            });
+            if(active) requestAnimationFrame(animate); else ctx.clearRect(0,0,canvas.width,canvas.height);
+        }
+        animate();
+    }
+
+    function passWord(skipVisuals = false) {
         if (!isPlaying) return;
         if (timerEnabled && currentMode !== 'flashcards') timer -= 3;
 
-        // Visual Feedback
-        if (currentMode !== 'flashcards') {
+        if (currentMode !== 'flashcards' && !skipVisuals) {
             const inputEl = document.getElementById('answer-input');
             inputEl.classList.add('flash-red');
             inputEl.value = "Antwoord: " + currentItem.w; 
@@ -415,13 +495,8 @@
                 inputEl.classList.remove('flash-red');
                 nextWord();
             }, 1000);
-        } else {
-             document.getElementById('definition-area').style.borderColor = "var(--c-bad)";
-             setTimeout(() => {
-                 document.getElementById('definition-area').style.borderColor = "";
-                 nextWord();
-             }, 500);
-        }
+            return; 
+        } 
         
         if (isReviewWord) {
             progressMap[currentItem.w] = 1; 
@@ -431,123 +506,75 @@
             progressMap[currentItem.w] = -1;
             starredMap[currentItem.w] = true;
         }
-        
         localStorage.setItem('vocab_starred', JSON.stringify(starredMap));
-        saveProgress();
-        refreshStats();
+        saveProgress(); refreshStats();
+        
+        if (currentMode === 'flashcards' || skipVisuals) {
+            nextWord();
+        }
     }
 
     function stopGame() {
         if (!isPlaying) return;
-        isPlaying = false;
-        clearInterval(gameInterval);
-        alert(`Gestopt. Score: ${score}`);
-        location.reload();
+        isPlaying = false; clearInterval(gameInterval);
+        alert(`Gestopt. Score: ${score}`); location.reload();
     }
-
     function gameOver() {
-        isPlaying = false;
-        clearInterval(gameInterval);
-        alert(`GAME OVER! Score: ${score}. Woord was: ${currentItem.w}`);
-        location.reload();
+        isPlaying = false; clearInterval(gameInterval);
+        alert(`GAME OVER! Score: ${score}. Woord was: ${currentItem.w}`); location.reload();
     }
-
     function endGameVictory() {
-        isPlaying = false;
-        clearInterval(gameInterval);
-        alert("GEWELDIG! Alles gekend in deze set!");
-        location.reload();
+        isPlaying = false; clearInterval(gameInterval);
+        alert("GEWELDIG! Alles gekend in deze set!"); location.reload();
     }
 
-    // --- 3. STORAGE & STATS ---
-
-    function saveProgress() {
-        localStorage.setItem('vocab_progress_v2', JSON.stringify(progressMap));
-        refreshStats();
-    }
-
+    function saveProgress() { localStorage.setItem('vocab_progress_v2', JSON.stringify(progressMap)); refreshStats(); }
     function refreshStats() {
         let counts = { "-1": 0, "0": 0, "1": 0, "2": 0 };
         let starCount = 0;
-        
         vocabDatabase.forEach(item => {
             let lvl = progressMap[item.w];
             if (lvl === undefined) lvl = 0;
             counts[lvl]++;
             if(starredMap[item.w]) starCount++;
         });
-
         document.getElementById('cnt-new').innerText = counts[0];
         document.getElementById('cnt-bad').innerText = counts[-1];
         document.getElementById('cnt-good').innerText = counts[1];
         document.getElementById('cnt-full').innerText = counts[2];
         document.getElementById('cnt-star').innerText = "★ " + starCount;
-
-        const maxPossiblePoints = vocabDatabase.length * 3;
-        let currentPoints = (counts[-1]*1) + (counts[1]*2) + (counts[2]*3);
-        const pct = maxPossiblePoints > 0 ? ((currentPoints / maxPossiblePoints) * 100).toFixed(2) : "0.00";
-        
+        const max = vocabDatabase.length * 3;
+        let pts = (counts[-1]*1) + (counts[1]*2) + (counts[2]*3);
+        const pct = max > 0 ? ((pts / max) * 100).toFixed(2) : "0.00";
         document.getElementById('mastery-bar').style.width = pct + "%";
         document.getElementById('mastery-pct').innerText = pct + "%";
     }
 
-    function resetProgress() {
-        if(confirm("Alles wissen?")) {
-            localStorage.clear(); location.reload();
-        }
-    }
-    function resetStarredToNew() {
-        const keys = Object.keys(starredMap);
-        if (keys.length === 0) return;
-        if(confirm("Reset ★ woorden?")) {
-            keys.forEach(w => progressMap[w] = 0);
-            saveProgress(); alert("Klaar.");
-        }
-    }
-    function unstarAll() {
-        if(confirm("Verwijder alle ★?")) {
-            starredMap = {}; localStorage.removeItem('vocab_starred'); refreshStats();
-        }
-    }
-
-    // --- 4. LIST MODAL ---
+    function resetProgress() { if(confirm("Alles wissen?")) { localStorage.clear(); location.reload(); }}
+    function resetStarredToNew() { const k = Object.keys(starredMap); if(k.length && confirm("Reset ★?")) { k.forEach(w=>progressMap[w]=0); saveProgress(); alert("Klaar");}}
+    function unstarAll() { if(confirm("Verwijder ★?")) { starredMap={}; localStorage.removeItem('vocab_starred'); refreshStats();}}
     function showList(type) {
         const modal = document.getElementById('list-modal'), body = document.getElementById('modal-list-body');
         const title = document.getElementById('modal-title');
-        
-        let words = []; let label = ""; let color = "";
-        
-        if (type === 'star') {
-            label = "Gemarkeerd"; color = "var(--c-star)";
-            words = vocabDatabase.filter(i => starredMap[i.w]);
-        } else {
-            const labels = {0:"Niet Gekend", "-1":"Slecht", 1:"Goed", 2:"Volledig"};
-            const colors = {0:"var(--c-new)", "-1":"var(--c-bad)", 1:"var(--c-good)", 2:"var(--c-full)"};
-            label = labels[type]; color = colors[type];
-            words = vocabDatabase.filter(i => (progressMap[i.w]||0)===type);
-        }
-
-        title.innerText = label; title.style.color = color; body.innerHTML = "";
-        if(words.length===0) body.innerHTML = "<div style='padding:20px;text-align:center'>Leeg</div>";
+        let words = [], label="", color="";
+        if (type === 'star') { label="Gemarkeerd"; color="var(--c-star)"; words=vocabDatabase.filter(i=>starredMap[i.w]); }
         else {
-            words.forEach(i => {
-                const isStar = starredMap[i.w]?'star-active':'star-inactive';
-                const div = document.createElement('div'); div.className='list-item';
-                div.innerHTML = `<div style="flex:1"><strong>${i.w}</strong> (U${i.u})</div><div class="star-toggle ${isStar}" onclick="toggleStar('${i.w.replace(/'/g, "\\'")}')">★</div>`;
-                body.appendChild(div);
-            });
+            const l={0:"Niet Gekend","-1":"Slecht",1:"Goed",2:"Volledig"}, c={0:"var(--c-new)","-1":"var(--c-bad)",1:"var(--c-good)",2:"var(--c-full)"};
+            label=l[type]; color=c[type]; words=vocabDatabase.filter(i=>(progressMap[i.w]||0)===type);
         }
+        title.innerText = label; title.style.color = color; body.innerHTML = "";
+        if(!words.length) body.innerHTML = "<div style='padding:20px;text-align:center'>Leeg</div>";
+        else words.forEach(i => {
+            const s = starredMap[i.w]?'star-active':'star-inactive';
+            const d = document.createElement('div'); d.className='list-item';
+            d.innerHTML = `<div style="flex:1"><strong>${i.w}</strong> (U${i.u})</div><div class="star-toggle ${s}" onclick="toggleStar('${i.w.replace(/'/g, "\\'")}')">★</div>`;
+            body.appendChild(d);
+        });
         modal.style.display = 'flex';
     }
-
-    function toggleStar(w) {
-        if(starredMap[w]) delete starredMap[w]; else starredMap[w]=true;
-        localStorage.setItem('vocab_starred', JSON.stringify(starredMap));
-        refreshStats(); closeModal();
-    }
+    function toggleStar(w) { if(starredMap[w]) delete starredMap[w]; else starredMap[w]=true; localStorage.setItem('vocab_starred', JSON.stringify(starredMap)); refreshStats(); closeModal(); }
     function closeModal() { document.getElementById('list-modal').style.display = 'none'; }
     window.onclick = e => { if(e.target == document.getElementById('list-modal')) closeModal(); }
-
 </script>
 </body>
 </html>
