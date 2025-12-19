@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VOCAB MASTER: OVERDRIVE</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="vocab_data.js"></script> 
+</head>
+<body> 
+
+    <div class="dashboard">
+        <div class="cat-btn new" onclick="showList(0)">
+            <span class="label">Niet Gekend</span>
+            <span class="count" id="cnt-new">0</span>
+        </div>
+        <div class="cat-btn bad" onclick="showList(-1)">
+            <span class="label">Slecht Gekend</span>
+            <span class="count" id="cnt-bad">0</span>
+        </div>
+        <div class="cat-btn good" onclick="showList(1)">
+            <span class="label">Goed Gekend</span>
+            <span class="count" id="cnt-good">0</span>
+        </div>
+        <div class="cat-btn full" onclick="showList(2)">
+            <span class="label">Volledig Gekend</span>
+            <span class="count" id="cnt-full">0</span>
+        </div>
+        <div class="cat-btn starred" onclick="showList('star')">
+            <span class="label">Ooit Moeilijk / Pass</span>
+            <span class="count" id="cnt-star">★ 0</span>
+        </div>
+    </div>
+
+    <div class="game-container" id="game-ui">
+        
+        <div class="progress-section">
+            <div class="progress-label">
+                <span>TOTALE PROGRESSIE</span>
+                <span id="mastery-pct">0.00%</span>
+            </div>
+            <div class="progress-track">
+                <div class="progress-fill" id="mastery-bar"></div>
+            </div>
+        </div>
+
+        <div class="hud">
+            <span>Score: <span id="score">0</span></span>
+            <span id="timer">25.0s</span>
+        </div>
+        
+        <div class="timer-container">
+            <div class="timer-marker" title="Starttijd (25s)"></div>
+            <div class="timer-fill" id="visual-timer"></div>
+        </div>
+
+        <div class="definition-box" id="definition-text">
+            Klik op START om te beginnen.<br>
+            Starttijd: 25s | Max: 60s
+        </div>
+
+        <div class="input-group">
+            <input type="text" id="answer-input" placeholder="..." disabled autocomplete="off">
+        </div>
+
+        <div class="controls" id="game-controls" style="display:none;">
+            <button class="btn btn-pass" onclick="passWord()">PASS (-3s)</button>
+            <button class="btn btn-stop" onclick="stopGame()">STOP & OPSLAAN</button>
+        </div>
+        
+        <button class="btn btn-start" id="start-btn" onclick="startGame()">START GAME</button>
+    </div>
+
+    <div class="reset-container">
+        <div class="reset-row">
+            <button class="btn-reset star-reset" onclick="resetStarredToNew()">
+                Reset ★ naar 'Niet Gekend'
+            </button>
+            <button class="btn-reset neutral" onclick="unstarAll()">
+                Verwijder alle ★
+            </button>
+        </div>
+        <button class="btn-reset danger" onclick="resetProgress()">
+            ⚠ RESET ALLES (Totaal)
+        </button>
+    </div>
+
+    <div class="modal" id="list-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title" style="margin:0;">Lijst</h2>
+                <button class="close-btn" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="word-list" id="modal-list-body"></div>
+        </div>
+    </div>
+
+<script>
+    // --- 1. SETUP & DATA ---
+    let progressMap = JSON.parse(localStorage.getItem('vocab_progress_v2')) || {};
+    let starredMap = JSON.parse(localStorage.getItem('vocab_starred')) || {};
+    
+    let activeQueue = [];
+    let currentItem = null;
+    let score = 0;
+    
+    const START_TIME = 25.0; 
+    const VISUAL_MAX_TIME = 60.0; 
+    let timer = START_TIME; 
+    
+    let gameInterval;
+    let isPlaying = false;
+
+    if (typeof vocabDatabase !== 'undefined') {
+        let hasChanges = false;
+        vocabDatabase.forEach(item => {
+            const level = progressMap[item.w];
+            if (level === -1 && !starredMap[item.w]) {
+                starredMap[item.w] = true;
+                hasChanges = true;
+            }
+        });
+        if(hasChanges) localStorage.setItem('vocab_starred', JSON.stringify(starredMap));
+        refreshStats();
+    } else {
+        document.getElementById('definition-text').innerText = "ERROR: vocab_data.js niet gevonden!";
+        document.getElementById('definition-text').style.color = "red";
+    }
+
+    // --- 2. GAME LOGIC ---
+
+    function startGame() {
+        buildQueue();
+        
+        if(activeQueue.length === 0) {
+            alert("Gefeliciteerd! Alle woorden zijn 'Volledig Gekend'.");
+            return;
+        }
+
+        document.getElementById('start-btn').style.display = 'none';
+        document.getElementById('game-controls').style.display = 'flex';
+        const input = document.getElementById('answer-input');
+        input.disabled = false;
+        input.focus();
+        input.placeholder = "Typ het woord...";
+        
+        score = 0;
+        timer = START_TIME;
+        isPlaying = true;
+        document.getElementById('score').innerText = score;
+
+        nextWord();
+        gameInterval = setInterval(gameLoop, 100);
+    }
+
+    function buildQueue() {
+        activeQueue = vocabDatabase.filter(item => {
+            const level = progressMap[item.w] || 0;
+            return level < 2; 
+        });
+        
+        activeQueue.sort(() => Math.random() - 0.5);
+    }
+
+    function gameLoop() {
+        if (!isPlaying) return;
+        timer -= 0.1;
+        
+        const timerEl = document.getElementById('timer');
+        timerEl.innerText = timer.toFixed(1) + 's';
+
+        // Visual Bar Update
+        const bar = document.getElementById('visual-timer');
+        let pct = (timer / VISUAL_MAX_TIME) * 100;
+        if (pct > 100) pct = 100; 
+        if (pct < 0) pct = 0;
+        bar.style.width = pct + "%";
+
+        // Kleuren
+        bar.className = "timer-fill"; 
+        timerEl.style.color = "var(--accent)"; 
+
+        if (timer <= 10) {
+            bar.classList.add('danger');
+            timerEl.style.color = "var(--c-bad)";
+        } else if (timer >= 50) { 
+            bar.classList.add('max');
+            timerEl.style.color = "var(--max)";
+        } else if (timer > 30) {
+            bar.classList.add('overdrive');
+             timerEl.style.color = "var(--overdrive)";
+        } else {
+            bar.classList.add('safe');
+        }
+
+        if (timer <= 0) gameOver();
+    }
+
+    function nextWord() {
+        if (activeQueue.length === 0) {
+            endGameVictory();
+            return;
+        }
+
+        const idx = Math.floor(Math.random() * activeQueue.length);
+        currentItem = activeQueue[idx];
+        
+        document.getElementById('definition-text').innerText = currentItem.d;
+        document.getElementById('answer-input').value = "";
+    }
+
+    document.getElementById('answer-input').addEventListener('input', (e) => {
+        if (!isPlaying) return;
+        
+        const val = e.target.value.trim().toLowerCase();
+        const correct = currentItem.w.toLowerCase();
+
+        if (val === correct) {
+            handleCorrect();
+        }
+    });
+
+    function handleCorrect() {
+        const inputEl = document.getElementById('answer-input');
+        inputEl.classList.add('flash-green');
+        setTimeout(() => inputEl.classList.remove('flash-green'), 300);
+
+        let currentLevel = progressMap[currentItem.w] || 0;
+        
+        if (currentLevel === -1) currentLevel = 1; 
+        else if (currentLevel === 0) currentLevel = 1;
+        else if (currentLevel === 1) currentLevel = 2;
+
+        progressMap[currentItem.w] = currentLevel;
+        saveProgress();
+
+        timer += 10;
+        if (timer > VISUAL_MAX_TIME) timer = VISUAL_MAX_TIME;
+        
+        score++;
+        document.getElementById('score').innerText = score;
+
+        if (currentLevel === 2) {
+            activeQueue = activeQueue.filter(i => i.w !== currentItem.w);
+        }
+
+        nextWord();
+    }
+
+    function passWord() {
+        if (!isPlaying) return;
+        
+        timer -= 3;
+        const inputEl = document.getElementById('answer-input');
+        inputEl.classList.add('flash-red');
+        inputEl.value = "Antwoord: " + currentItem.w; 
+        
+        starredMap[currentItem.w] = true;
+        localStorage.setItem('vocab_starred', JSON.stringify(starredMap));
+        refreshStats();
+
+        setTimeout(() => {
+            inputEl.classList.remove('flash-red');
+            progressMap[currentItem.w] = -1;
+            saveProgress();
+            nextWord();
+        }, 1000); 
+    }
+
+    function stopGame() {
+        if (!isPlaying) return;
+        isPlaying = false;
+        clearInterval(gameInterval);
+        alert(`Je bent gestopt.\nJe score was: ${score}\nAlles is opgeslagen.`);
+        location.reload();
+    }
+
+    function gameOver() {
+        isPlaying = false;
+        clearInterval(gameInterval);
+        alert(`GAME OVER!\nJe score: ${score}\nHet laatste woord was: ${currentItem.w}`);
+        location.reload();
+    }
+
+    function endGameVictory() {
+        isPlaying = false;
+        clearInterval(gameInterval);
+        alert("Sessie voltooid! Goed gewerkt.");
+        location.reload();
+    }
+
+    // --- 3. STORAGE, STATS & RESET ---
+
+    function saveProgress() {
+        localStorage.setItem('vocab_progress_v2', JSON.stringify(progressMap));
+        refreshStats();
+    }
+
+    function refreshStats() {
+        let counts = { "-1": 0, "0": 0, "1": 0, "2": 0 };
+        let starCount = 0;
+        let totalPoints = 0; 
+        
+        const POINTS_BAD = 1; 
+        const POINTS_GOOD = 2; 
+        const POINTS_FULL = 3; 
+        
+        vocabDatabase.forEach(item => {
+            let lvl = progressMap[item.w];
+            if (lvl === undefined) lvl = 0;
+            
+            counts[lvl]++;
+            if(starredMap[item.w]) starCount++;
+            
+            if (lvl === -1) totalPoints += POINTS_BAD;
+            else if (lvl === 1) totalPoints += POINTS_GOOD;
+            else if (lvl === 2) totalPoints += POINTS_FULL;
+        });
+
+        document.getElementById('cnt-new').innerText = counts[0];
+        document.getElementById('cnt-bad').innerText = counts[-1];
+        document.getElementById('cnt-good').innerText = counts[1];
+        document.getElementById('cnt-full').innerText = counts[2];
+        document.getElementById('cnt-star').innerText = "★ " + starCount;
+
+        const maxPossiblePoints = vocabDatabase.length * 3;
+        const pct = maxPossiblePoints > 0 ? ((totalPoints / maxPossiblePoints) * 100).toFixed(2) : "0.00";
+        
+        document.getElementById('mastery-bar').style.width = pct + "%";
+        document.getElementById('mastery-pct').innerText = pct + "%";
+    }
+
+    // --- BUTTON ACTIONS ---
+
+    function resetStarredToNew() {
+        const starredKeys = Object.keys(starredMap);
+        if (starredKeys.length === 0) {
+            alert("Je hebt geen woorden met een ster ★.");
+            return;
+        }
+
+        if(confirm(`Wil je de progressie van ${starredKeys.length} woorden met ★ resetten naar 'Niet Gekend'?`)) {
+            starredKeys.forEach(word => {
+                progressMap[word] = 0;
+            });
+            saveProgress();
+            alert("Reset voltooid.");
+        }
+    }
+
+    function unstarAll() {
+        if(confirm("Wil je alle sterretjes ★ verwijderen? (De progressie van de woorden blijft behouden).")) {
+            starredMap = {};
+            localStorage.removeItem('vocab_starred');
+            refreshStats();
+            alert("Alle sterren verwijderd.");
+        }
+    }
+
+    function resetProgress() {
+        if(confirm("LET OP: Wil je echt ALLES wissen? Alle progressie en sterren gaan verloren.")) {
+            localStorage.removeItem('vocab_progress_v2');
+            localStorage.removeItem('vocab_starred');
+            location.reload();
+        }
+    }
+
+    // --- 4. MODAL / LIST VIEWER ---
+
+    function showList(type) {
+        const modal = document.getElementById('list-modal');
+        const title = document.getElementById('modal-title');
+        const listBody = document.getElementById('modal-list-body');
+        
+        let label = "";
+        let color = "";
+        let wordsToShow = [];
+        
+        if (type === 'star') {
+            label = "Gemarkeerd (Ooit moeilijk)";
+            color = "var(--c-star)";
+            wordsToShow = vocabDatabase.filter(item => starredMap[item.w]);
+        } else {
+            if (type === 0) { label = "Niet Gekend"; color = "var(--c-new)"; }
+            if (type === -1) { label = "Slecht Gekend"; color = "var(--c-bad)"; }
+            if (type === 1) { label = "Goed Gekend"; color = "var(--c-good)"; }
+            if (type === 2) { label = "Volledig Gekend"; color = "var(--c-full)"; }
+            
+            wordsToShow = vocabDatabase.filter(item => {
+                let lvl = progressMap[item.w];
+                if (lvl === undefined) lvl = 0;
+                return lvl === type;
+            });
+        }
+
+        title.innerText = label;
+        title.style.color = color;
+        listBody.innerHTML = "";
+
+        if (wordsToShow.length === 0) {
+            listBody.innerHTML = "<div style='padding:20px; text-align:center; color:#666;'>Geen woorden.</div>";
+        } else {
+            wordsToShow.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'list-item';
+                
+                const isStarred = starredMap[item.w] ? '★' : '☆';
+                const starClass = starredMap[item.w] ? 'star-active' : 'star-inactive';
+                
+                div.innerHTML = `
+                    <div style="flex:1"><strong>${item.w}</strong></div>
+                    <div class="star-toggle ${starClass}" onclick="toggleStar('${item.w.replace(/'/g, "\\'")}')" title="Klik om te markeren">${isStarred}</div>
+                `;
+                listBody.appendChild(div);
+            });
+        }
+
+        modal.style.display = 'flex';
+    }
+    
+    function toggleStar(word) {
+        if (starredMap[word]) {
+            delete starredMap[word];
+        } else {
+            starredMap[word] = true;
+        }
+        localStorage.setItem('vocab_starred', JSON.stringify(starredMap));
+        refreshStats();
+        
+        const color = document.getElementById('modal-title').style.color;
+        let currentType = null;
+        if (color.includes('245')) currentType = 'star'; 
+        else if (color.includes('156')) currentType = 0; 
+        else if (color.includes('239')) currentType = -1; 
+        else if (color.includes('234')) currentType = 1; 
+        else if (color.includes('34')) currentType = 2; 
+        
+        if (currentType !== null) showList(currentType);
+        else closeModal();
+    }
+
+    function closeModal() {
+        document.getElementById('list-modal').style.display = 'none';
+    }
+    
+    window.onclick = function(event) {
+        const modal = document.getElementById('list-modal');
+        if (event.target == modal) {
+            modal.style.display = "none";
+        }
+    }
+
+</script>
+</body>
+</html> 
