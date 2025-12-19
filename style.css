@@ -93,16 +93,27 @@ body {
 .timer-fill.overdrive { background: var(--overdrive); box-shadow: 0 0 5px var(--overdrive); }
 .timer-fill.max { background: var(--max); box-shadow: 0 0 15px var(--max); }
 
-/* NIEUW: TOGGLE VOOR TIJD */
-.toggle-container {
-    margin-bottom: 15px; display: flex; justify-content: center; align-items: center;
+/* SETTINGS ROW */
+.settings-row {
+    margin-bottom: 20px; display: flex; justify-content: center; align-items: center; gap: 15px;
+    flex-wrap: wrap; background: #252525; padding: 12px; border-radius: 8px;
 }
+
 .toggle-label {
-    cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 1rem; color: var(--text);
+    cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 0.9rem; color: var(--text);
 }
 .toggle-label input {
-    width: 20px; height: 20px; accent-color: var(--accent); cursor: pointer; margin: 0;
+    width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; margin: 0;
 }
+
+/* Unit Select Styling */
+.unit-select {
+    padding: 8px 12px; border-radius: 6px; background: #333; color: white;
+    border: 1px solid #555; outline: none; font-size: 0.9rem; cursor: pointer;
+    max-width: 180px;
+}
+.unit-select:hover { border-color: var(--accent); }
+.unit-select option:disabled { color: var(--c-full); font-style: italic; background: #222; }
 
 .hud {
     display: flex; justify-content: space-between; align-items: center;
@@ -146,12 +157,12 @@ input[type="text"]:focus { border-color: var(--accent); }
 .reset-container {
     margin-top: 30px; display: flex; flex-direction: column; gap: 15px; align-items: center; width: 100%;
 }
-.reset-row { display: flex; gap: 15px; width: 100%; max-width: 600px; }
+.reset-row { display: flex; gap: 15px; width: 100%; max-width: 600px; flex-wrap: wrap; justify-content: center; }
 
 .btn-reset {
     background: transparent; border: 1px solid #444; color: #888;
     padding: 10px 15px; border-radius: 6px; cursor: pointer; font-size: 0.85rem;
-    transition: all 0.2s; text-transform: uppercase; font-weight: bold; flex: 1;
+    transition: all 0.2s; text-transform: uppercase; font-weight: bold; flex: 1; min-width: 120px;
 }
 
 .btn-reset.star-reset { border-color: var(--c-star); color: var(--c-star); }
