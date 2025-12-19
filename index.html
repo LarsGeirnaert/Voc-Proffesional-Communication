@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VOCAB MASTER: OVERDRIVE</title>
+    <title>VOCAB MASTER: DUO MODE</title>
     <link rel="stylesheet" href="style.css">
     <script src="vocab_data.js"></script> 
 </head>
@@ -49,17 +49,16 @@
             <span id="timer">25.0s</span>
         </div>
         
-        <div class="timer-container">
+        <div class="timer-container" id="timer-container-div">
             <div class="timer-marker" title="Starttijd (25s)"></div>
             <div class="timer-fill" id="visual-timer"></div>
         </div>
 
-        <div class="definition-box" id="definition-text">
-            Klik op START om te beginnen.<br>
-            Starttijd: 25s | Max: 60s
+        <div class="definition-box" id="definition-area">
+            Klik op START om te beginnen.
         </div>
 
-        <div class="input-group">
+        <div class="input-group" id="input-area">
             <input type="text" id="answer-input" placeholder="..." disabled autocomplete="off">
         </div>
 
@@ -67,16 +66,33 @@
             <button class="btn btn-pass" onclick="passWord()">PASS (Overslaan)</button>
             <button class="btn btn-stop" onclick="stopGame()">STOP & OPSLAAN</button>
         </div>
+
+        <div class="fc-controls" id="fc-controls" style="display:none;">
+             <button class="btn btn-fc-bad" onclick="handleFlashcardResult(false)">❌ Nog niet</button>
+             <button class="btn btn-fc-good" onclick="handleFlashcardResult(true)">✅ Ik wist hem</button>
+        </div>
+        <div class="controls" id="fc-stop-controls" style="display:none;">
+             <button class="btn btn-stop" onclick="stopGame()">STOP</button>
+        </div>
         
         <div class="settings-row" id="settings-div">
-            <label class="toggle-label">
-                <input type="checkbox" id="timer-check" checked>
-                <span>Tijdslimiet</span>
-            </label>
+            <select id="mode-select" class="game-select" onchange="toggleSettingsUI()">
+                <option value="overdrive">🚀 Overdrive (Typen)</option>
+                <option value="flashcards">🎴 Flashcards</option>
+            </select>
 
             <select id="unit-select" class="unit-select" onchange="saveUnitSelection()">
                 <option value="all">Alle Units</option>
-                </select>
+            </select>
+            
+            <label class="toggle-label" id="timer-toggle-label">
+                <input type="checkbox" id="timer-check" checked>
+                <span>Tijd</span>
+            </label>
+
+            <button class="btn-reset-unit" onclick="resetSpecificUnit()" title="Reset deze unit naar 0">
+                ↺ Reset
+            </button>
         </div>
         
         <button class="btn btn-start" id="start-btn" onclick="startGame()">START GAME</button>
@@ -84,21 +100,11 @@
 
     <div class="reset-container">
         <div class="reset-row">
-            <button class="btn-reset neutral" onclick="resetSpecificUnit()">
-                Reset Unit...
-            </button>
-
-            <button class="btn-reset star-reset" onclick="resetStarredToNew()">
-                Reset ★
-            </button>
-            
-            <button class="btn-reset neutral" onclick="unstarAll()">
-                Verwijder ★
-            </button>
+            <button class="btn-reset neutral" onclick="resetSpecificUnit()">Reset Unit...</button>
+            <button class="btn-reset star-reset" onclick="resetStarredToNew()">Reset ★</button>
+            <button class="btn-reset neutral" onclick="unstarAll()">Verwijder ★</button>
         </div>
-        <button class="btn-reset danger" onclick="resetProgress()">
-            ⚠ RESET ALLES (Totaal)
-        </button>
+        <button class="btn-reset danger" onclick="resetProgress()">⚠ RESET ALLES (Totaal)</button>
     </div>
 
     <div class="modal" id="list-modal">
@@ -126,6 +132,8 @@
     const VISUAL_MAX_TIME = 60.0; 
     let timer = START_TIME; 
     let timerEnabled = true; 
+    let currentMode = 'overdrive'; 
+    let isFlipped = false; // Voor flashcards
     
     let gameInterval;
     let isPlaying = false;
@@ -144,75 +152,67 @@
         refreshStats();
         populateUnitDropdown(); 
     } else {
-        document.getElementById('definition-text').innerText = "ERROR: vocab_data.js niet gevonden!";
-        document.getElementById('definition-text').style.color = "red";
+        document.getElementById('definition-area').innerText = "ERROR: vocab_data.js niet gevonden!";
+        document.getElementById('definition-area').style.color = "red";
     }
 
-    // --- FUNCTIES VOOR DROPDOWN & RESET ---
+    // --- UI FUNCTIES ---
+
+    function toggleSettingsUI() {
+        const mode = document.getElementById('mode-select').value;
+        const timerLabel = document.getElementById('timer-toggle-label');
+        if (mode === 'flashcards') {
+            timerLabel.style.display = 'none';
+        } else {
+            timerLabel.style.display = 'flex';
+        }
+    }
 
     function populateUnitDropdown() {
         const select = document.getElementById('unit-select');
         select.innerHTML = '<option value="all">Alle Units</option>';
-        
-        const uniqueUnits = [...new Set(vocabDatabase.map(item => item.u))];
-        uniqueUnits.sort((a, b) => a - b);
+        const uniqueUnits = [...new Set(vocabDatabase.map(item => item.u))].sort((a,b)=>a-b);
 
         uniqueUnits.forEach(unit => {
             const option = document.createElement('option');
             option.value = unit;
-            
             const unitWords = vocabDatabase.filter(w => w.u === unit);
-            const totalInUnit = unitWords.length;
-            const masteredInUnit = unitWords.filter(w => (progressMap[w.w] || 0) === 2).length;
+            const total = unitWords.length;
+            const mastered = unitWords.filter(w => (progressMap[w.w] || 0) === 2).length;
             
-            if (totalInUnit > 0 && totalInUnit === masteredInUnit) {
+            if (total > 0 && total === mastered) {
                 option.innerText = `Unit ${unit} (VOLTOOID)`;
                 option.disabled = true; 
             } else {
                 option.innerText = `Unit ${unit}`;
             }
-            
             select.appendChild(option);
         });
 
         const savedUnit = localStorage.getItem('vocab_last_unit');
         if (savedUnit) {
-            const optToSelect = select.querySelector(`option[value="${savedUnit}"]`);
-            if (optToSelect && !optToSelect.disabled) {
-                select.value = savedUnit;
-            }
+            const opt = select.querySelector(`option[value="${savedUnit}"]`);
+            if (opt && !opt.disabled) select.value = savedUnit;
         }
     }
 
     function saveUnitSelection() {
-        const val = document.getElementById('unit-select').value;
-        localStorage.setItem('vocab_last_unit', val);
+        localStorage.setItem('vocab_last_unit', document.getElementById('unit-select').value);
     }
 
-    // NIEUWE FUNCTIE: VRAAGT WELKE UNIT TE RESETTEN
     function resetSpecificUnit() {
-        // Vraag gebruiker om input
-        const unitInput = prompt("Welke Unit wil je resetten?\n(Typ het nummer, bijv. 1)");
-        
-        if (!unitInput) return; // Geannuleerd
-
+        const unitInput = prompt("Welke Unit wil je resetten? (Typ nummer)");
+        if (!unitInput) return;
         const targetUnit = parseInt(unitInput);
         
-        // Check of unit bestaat
         const validUnits = [...new Set(vocabDatabase.map(i => i.u))];
-        if (!validUnits.includes(targetUnit)) {
-            alert("Die unit bestaat niet in de database.");
-            return;
-        }
+        if (!validUnits.includes(targetUnit)) { alert("Ongeldige Unit."); return; }
 
-        if(confirm(`Weet je zeker dat je ALLE progressie van Unit ${targetUnit} wilt resetten naar 0?`)) {
+        if(confirm(`Unit ${targetUnit} resetten?`)) {
             vocabDatabase.forEach(item => {
-                if (item.u === targetUnit) {
-                    progressMap[item.w] = 0;
-                }
+                if (item.u === targetUnit) progressMap[item.w] = 0;
             });
-            saveProgress();
-            populateUnitDropdown(); 
+            saveProgress(); populateUnitDropdown(); 
             alert(`Unit ${targetUnit} is gereset.`);
         }
     }
@@ -221,43 +221,59 @@
 
     function startGame() {
         buildQueue();
-        
         if(activeQueue.length === 0) {
-            alert("Deze selectie is volledig 'Volledig Gekend'! Kies een andere unit of reset deze.");
-            return;
+            alert("Deze selectie is al volledig gekend!"); return;
         }
 
+        currentMode = document.getElementById('mode-select').value;
         timerEnabled = document.getElementById('timer-check').checked;
         lastWord = null; 
-
-        document.getElementById('start-btn').style.display = 'none';
-        document.getElementById('settings-div').style.display = 'none'; 
-        document.getElementById('game-controls').style.display = 'flex';
-        
-        const input = document.getElementById('answer-input');
-        input.disabled = false;
-        input.focus();
-        input.placeholder = "Typ het woord...";
-        
         score = 0;
         timer = START_TIME;
         isPlaying = true;
         document.getElementById('score').innerText = score;
 
-        if (!timerEnabled) {
-            document.getElementById('timer').innerText = "∞";
-            document.getElementById('timer').style.color = "var(--accent)";
-            document.getElementById('visual-timer').style.width = "100%";
-            document.getElementById('visual-timer').className = "timer-fill safe";
+        // UI Setup
+        document.getElementById('start-btn').style.display = 'none';
+        document.getElementById('settings-div').style.display = 'none'; 
+        
+        if (currentMode === 'flashcards') {
+            document.getElementById('input-area').style.display = 'none';
+            document.getElementById('game-controls').style.display = 'none';
+            document.getElementById('fc-controls').style.display = 'flex';
+            document.getElementById('fc-stop-controls').style.display = 'flex';
+            document.getElementById('timer-container-div').style.display = 'none';
+            document.getElementById('timer').style.opacity = '0'; 
+        } else {
+            // Overdrive (Typen)
+            document.getElementById('input-area').style.display = 'block';
+            document.getElementById('game-controls').style.display = 'flex';
+            document.getElementById('fc-controls').style.display = 'none';
+            document.getElementById('fc-stop-controls').style.display = 'none';
+            document.getElementById('timer-container-div').style.display = 'block';
+            document.getElementById('timer').style.opacity = '1';
+            
+            const input = document.getElementById('answer-input');
+            input.disabled = false; input.value = ""; input.focus();
+            
+            if (!timerEnabled) {
+                document.getElementById('timer').innerText = "∞";
+                document.getElementById('timer').style.color = "var(--accent)";
+                document.getElementById('visual-timer').style.width = "100%";
+                document.getElementById('visual-timer').className = "timer-fill safe";
+            }
         }
 
         nextWord();
-        gameInterval = setInterval(gameLoop, 100);
+        
+        // Start timer alleen als niet flashcards en enabled
+        if (currentMode !== 'flashcards') {
+            gameInterval = setInterval(gameLoop, 100);
+        }
     }
 
     function buildQueue() {
         const selectedUnit = document.getElementById('unit-select').value;
-
         activeQueue = vocabDatabase.filter(item => {
             const level = progressMap[item.w] || 0;
             const notMastered = level < 2;
@@ -268,12 +284,11 @@
 
     function gameLoop() {
         if (!isPlaying) return;
-        
         if (timerEnabled) {
             timer -= 0.1;
             const timerEl = document.getElementById('timer');
             timerEl.innerText = timer.toFixed(1) + 's';
-
+            
             const bar = document.getElementById('visual-timer');
             let pct = (timer / VISUAL_MAX_TIME) * 100;
             if (pct > 100) pct = 100; if (pct < 0) pct = 0;
@@ -290,73 +305,96 @@
     }
 
     function nextWord() {
-        if (activeQueue.length === 0) {
-            endGameVictory();
-            return;
-        }
+        if (activeQueue.length === 0) { endGameVictory(); return; }
 
+        // Review Logica (5%)
         let totalMastered = 0;
         vocabDatabase.forEach(i => { if((progressMap[i.w]||0)===2) totalMastered++; });
         const masteryRatio = totalMastered / vocabDatabase.length;
-
         isReviewWord = false; 
 
         if (masteryRatio > 0.5 && Math.random() < 0.05) {
             const masteredPool = vocabDatabase.filter(i => (progressMap[i.w]||0)===2);
             if (masteredPool.length > 0) {
-                const rnd = Math.floor(Math.random() * masteredPool.length);
-                currentItem = masteredPool[rnd];
+                currentItem = masteredPool[Math.floor(Math.random() * masteredPool.length)];
                 isReviewWord = true; 
             }
         }
 
         if (!isReviewWord) {
             let candidates = [...activeQueue];
-            if (candidates.length > 1 && lastWord) {
-                candidates = candidates.filter(w => w.w !== lastWord.w);
-            }
-            
-            const idx = Math.floor(Math.random() * candidates.length);
-            currentItem = candidates[idx];
+            if (candidates.length > 1 && lastWord) candidates = candidates.filter(w => w.w !== lastWord.w);
+            currentItem = candidates[Math.floor(Math.random() * candidates.length)];
         }
-
         lastWord = currentItem; 
         
-        document.getElementById('definition-text').innerText = currentItem.d;
-        document.getElementById('answer-input').value = "";
+        renderGameUI();
     }
 
+    function renderGameUI() {
+        const area = document.getElementById('definition-area');
+        
+        if (currentMode === 'flashcards') {
+            isFlipped = false;
+            // Bouw de 3D card structuur
+            area.innerHTML = `
+                <div class="flashcard-content" onclick="this.classList.toggle('flipped'); isFlipped = !isFlipped;">
+                    <div class="fc-face fc-front">
+                        ${currentItem.d}
+                    </div>
+                    <div class="fc-face fc-back">
+                        ${currentItem.w}
+                    </div>
+                </div>
+            `;
+        } else {
+            // Overdrive (Standaard)
+            area.innerHTML = currentItem.d;
+            document.getElementById('answer-input').value = "";
+        }
+    }
+
+    // --- INPUT HANDLING (Overdrive) ---
     document.getElementById('answer-input').addEventListener('input', (e) => {
         if (!isPlaying) return;
+        if (currentMode === 'flashcards') return;
+        
         const val = e.target.value.trim().toLowerCase();
         const correct = currentItem.w.toLowerCase();
         if (val === correct) handleCorrect();
     });
 
-    function handleCorrect() {
-        const inputEl = document.getElementById('answer-input');
-        inputEl.classList.add('flash-green');
-        setTimeout(() => inputEl.classList.remove('flash-green'), 300);
-
-        if (isReviewWord) {
-            // Niets doen
+    // --- FLASHCARD HANDLING ---
+    window.handleFlashcardResult = function(success) {
+        if (!isPlaying) return;
+        if (success) {
+            handleCorrect(); 
         } else {
-            let currentLevel = progressMap[currentItem.w] || 0;
-            if (currentLevel === -1) currentLevel = 1; 
-            else if (currentLevel === 0) currentLevel = 1;
-            else if (currentLevel === 1) currentLevel = 2;
+            passWord(); 
+        }
+    }
 
-            progressMap[currentItem.w] = currentLevel;
-            saveProgress();
-
-            if (currentLevel === 2) {
-                activeQueue = activeQueue.filter(i => i.w !== currentItem.w);
-            }
+    function handleCorrect() {
+        // Flash visual
+        if (currentMode !== 'flashcards') {
+            const inputEl = document.getElementById('answer-input');
+            inputEl.classList.add('flash-green');
+            setTimeout(() => inputEl.classList.remove('flash-green'), 300);
+        } else {
+            document.getElementById('definition-area').style.borderColor = "var(--c-full)";
+            setTimeout(() => document.getElementById('definition-area').style.borderColor = "", 300);
         }
 
-        if (timerEnabled) {
-            timer += 10;
-            if (timer > VISUAL_MAX_TIME) timer = VISUAL_MAX_TIME;
+        if (!isReviewWord) {
+            let lvl = progressMap[currentItem.w] || 0;
+            lvl = (lvl===-1)?1:(lvl===0)?1:2;
+            progressMap[currentItem.w] = lvl; 
+            saveProgress();
+            if(lvl===2) activeQueue = activeQueue.filter(i=>i.w!==currentItem.w);
+        }
+
+        if (timerEnabled && currentMode !== 'flashcards') {
+            timer = Math.min(timer + 10, VISUAL_MAX_TIME);
         }
         
         score++;
@@ -366,16 +404,29 @@
 
     function passWord() {
         if (!isPlaying) return;
-        if (timerEnabled) timer -= 3;
+        if (timerEnabled && currentMode !== 'flashcards') timer -= 3;
 
-        const inputEl = document.getElementById('answer-input');
-        inputEl.classList.add('flash-red');
-        inputEl.value = "Antwoord: " + currentItem.w; 
+        // Visual Feedback
+        if (currentMode !== 'flashcards') {
+            const inputEl = document.getElementById('answer-input');
+            inputEl.classList.add('flash-red');
+            inputEl.value = "Antwoord: " + currentItem.w; 
+            setTimeout(() => {
+                inputEl.classList.remove('flash-red');
+                nextWord();
+            }, 1000);
+        } else {
+             document.getElementById('definition-area').style.borderColor = "var(--c-bad)";
+             setTimeout(() => {
+                 document.getElementById('definition-area').style.borderColor = "";
+                 nextWord();
+             }, 500);
+        }
         
         if (isReviewWord) {
             progressMap[currentItem.w] = 1; 
             activeQueue.push(currentItem);
-            alert("Oei! Dit woord was 'Volledig Gekend', maar nu gedegradeerd naar 'Goed Gekend'.");
+            alert("Oei! Degradeerd naar 'Goed Gekend'.");
         } else {
             progressMap[currentItem.w] = -1;
             starredMap[currentItem.w] = true;
@@ -384,32 +435,27 @@
         localStorage.setItem('vocab_starred', JSON.stringify(starredMap));
         saveProgress();
         refreshStats();
-
-        setTimeout(() => {
-            inputEl.classList.remove('flash-red');
-            nextWord();
-        }, 1000); 
     }
 
     function stopGame() {
         if (!isPlaying) return;
         isPlaying = false;
         clearInterval(gameInterval);
-        alert(`Je bent gestopt.\nJe score was: ${score}\nAlles is opgeslagen.`);
+        alert(`Gestopt. Score: ${score}`);
         location.reload();
     }
 
     function gameOver() {
         isPlaying = false;
         clearInterval(gameInterval);
-        alert(`GAME OVER!\nJe score: ${score}\nHet laatste woord was: ${currentItem.w}`);
+        alert(`GAME OVER! Score: ${score}. Woord was: ${currentItem.w}`);
         location.reload();
     }
 
     function endGameVictory() {
         isPlaying = false;
         clearInterval(gameInterval);
-        alert("GEWELDIG! Je hebt alle woorden in deze sessie 'Volledig Gekend'!");
+        alert("GEWELDIG! Alles gekend in deze set!");
         location.reload();
     }
 
@@ -446,83 +492,61 @@
     }
 
     function resetProgress() {
-        if(confirm("Weet je zeker dat je alle voortgang wilt wissen?")) {
-            localStorage.removeItem('vocab_progress_v2');
-            localStorage.removeItem('vocab_starred');
-            location.reload();
+        if(confirm("Alles wissen?")) {
+            localStorage.clear(); location.reload();
         }
     }
-
     function resetStarredToNew() {
-        const starredKeys = Object.keys(starredMap);
-        if (starredKeys.length === 0) { alert("Geen sterren."); return; }
-        if(confirm(`Wil je de progressie van ${starredKeys.length} woorden met ★ resetten?`)) {
-            starredKeys.forEach(word => { progressMap[word] = 0; });
-            saveProgress();
-            alert("Reset voltooid.");
+        const keys = Object.keys(starredMap);
+        if (keys.length === 0) return;
+        if(confirm("Reset ★ woorden?")) {
+            keys.forEach(w => progressMap[w] = 0);
+            saveProgress(); alert("Klaar.");
         }
     }
-
     function unstarAll() {
-        if(confirm("Wil je alle sterretjes ★ verwijderen?")) {
-            starredMap = {};
-            localStorage.removeItem('vocab_starred');
-            refreshStats();
-            alert("Alle sterren verwijderd.");
+        if(confirm("Verwijder alle ★?")) {
+            starredMap = {}; localStorage.removeItem('vocab_starred'); refreshStats();
         }
     }
 
-    // --- 4. MODAL ---
-
+    // --- 4. LIST MODAL ---
     function showList(type) {
-        const modal = document.getElementById('list-modal');
+        const modal = document.getElementById('list-modal'), body = document.getElementById('modal-list-body');
         const title = document.getElementById('modal-title');
-        const listBody = document.getElementById('modal-list-body');
         
-        let label = ""; let color = ""; let wordsToShow = [];
+        let words = []; let label = ""; let color = "";
         
         if (type === 'star') {
             label = "Gemarkeerd"; color = "var(--c-star)";
-            wordsToShow = vocabDatabase.filter(item => starredMap[item.w]);
+            words = vocabDatabase.filter(i => starredMap[i.w]);
         } else {
-            if (type === 0) { label = "Niet Gekend"; color = "var(--c-new)"; }
-            if (type === -1) { label = "Slecht Gekend"; color = "var(--c-bad)"; }
-            if (type === 1) { label = "Goed Gekend"; color = "var(--c-good)"; }
-            if (type === 2) { label = "Volledig Gekend"; color = "var(--c-full)"; }
-            
-            wordsToShow = vocabDatabase.filter(item => {
-                let lvl = progressMap[item.w];
-                if (lvl === undefined) lvl = 0;
-                return lvl === type;
-            });
+            const labels = {0:"Niet Gekend", "-1":"Slecht", 1:"Goed", 2:"Volledig"};
+            const colors = {0:"var(--c-new)", "-1":"var(--c-bad)", 1:"var(--c-good)", 2:"var(--c-full)"};
+            label = labels[type]; color = colors[type];
+            words = vocabDatabase.filter(i => (progressMap[i.w]||0)===type);
         }
 
-        title.innerText = label; title.style.color = color; listBody.innerHTML = "";
-        if (wordsToShow.length === 0) {
-            listBody.innerHTML = "<div style='padding:20px; text-align:center; color:#666;'>Geen woorden.</div>";
-        } else {
-            wordsToShow.forEach(item => {
-                const div = document.createElement('div');
-                div.className = 'list-item';
-                const isStarred = starredMap[item.w] ? '★' : '☆';
-                const starClass = starredMap[item.w] ? 'star-active' : 'star-inactive';
-                div.innerHTML = `<div style="flex:1"><strong>${item.w}</strong> <span style="font-size:0.8em; color:#666;">(U${item.u})</span></div><div class="star-toggle ${starClass}" onclick="toggleStar('${item.w.replace(/'/g, "\\'")}')">${isStarred}</div>`;
-                listBody.appendChild(div);
+        title.innerText = label; title.style.color = color; body.innerHTML = "";
+        if(words.length===0) body.innerHTML = "<div style='padding:20px;text-align:center'>Leeg</div>";
+        else {
+            words.forEach(i => {
+                const isStar = starredMap[i.w]?'star-active':'star-inactive';
+                const div = document.createElement('div'); div.className='list-item';
+                div.innerHTML = `<div style="flex:1"><strong>${i.w}</strong> (U${i.u})</div><div class="star-toggle ${isStar}" onclick="toggleStar('${i.w.replace(/'/g, "\\'")}')">★</div>`;
+                body.appendChild(div);
             });
         }
         modal.style.display = 'flex';
     }
-    
-    function toggleStar(word) {
-        if (starredMap[word]) delete starredMap[word];
-        else starredMap[word] = true;
-        localStorage.setItem('vocab_starred', JSON.stringify(starredMap));
-        refreshStats();
-        closeModal();
-    }
 
+    function toggleStar(w) {
+        if(starredMap[w]) delete starredMap[w]; else starredMap[w]=true;
+        localStorage.setItem('vocab_starred', JSON.stringify(starredMap));
+        refreshStats(); closeModal();
+    }
     function closeModal() { document.getElementById('list-modal').style.display = 'none'; }
-    window.onclick = function(event) { if (event.target == document.getElementById('list-modal')) closeModal(); }
+    window.onclick = e => { if(e.target == document.getElementById('list-modal')) closeModal(); }
 
 </script>
 </body>
