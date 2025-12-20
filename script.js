@@ -1,28 +1,28 @@
 // --- 1. SETUP ---
-let activeDB = [];
+let activeDB = []; 
 let progressMap = JSON.parse(localStorage.getItem('vocab_progress_v2')) || {};
 let starredMap = JSON.parse(localStorage.getItem('vocab_starred')) || {};
 
 let activeQueue = [];
 let currentItem = null;
-let isReviewWord = false;
+let isReviewWord = false; 
 let score = 0;
-let currentListType = null;
+let currentListType = null; 
 
-const START_TIME = 25.0;
-const VISUAL_MAX_TIME = 60.0;
-let timer = START_TIME;
-let timerEnabled = true;
-let currentMode = 'overdrive';
-let isFlipped = false; let isRevealed = false; let isProcessing = false;
+const START_TIME = 25.0; 
+const VISUAL_MAX_TIME = 60.0; 
+let timer = START_TIME; 
+let timerEnabled = true; 
+let currentMode = 'overdrive'; 
+let isFlipped = false; let isRevealed = false; let isProcessing = false; 
 let gameInterval; let isPlaying = false;
 
 // AUTOMATISCHE START
 window.onload = function() {
     if (typeof vocabDatabase !== 'undefined') {
         activeDB = vocabDatabase; // Gebruik direct de standaard lijst
-        populateUnitDropdown();
-        refreshStats();
+        populateUnitDropdown(); 
+        refreshStats(); 
         toggleSettingsUI(); // Meteen UI aanpassen aan standaard selectie
     } else {
         document.getElementById('definition-area').innerText = "ERROR: vocab_data.js ontbreekt!";
@@ -36,7 +36,7 @@ function resetStarredToNew() {
     if (starredKeys.length === 0) { alert("Geen sterren."); return; }
     if(confirm(`Reset progressie van ${starredKeys.length} gemarkeerde woorden?`)) {
         starredKeys.forEach(word => { progressMap[word] = 0; });
-        saveProgress();
+        saveProgress(); 
         alert("Reset voltooid.");
     }
 }
@@ -96,11 +96,11 @@ function startGame() {
     timerEnabled = document.getElementById('timer-check').checked;
     score = 0; timer = START_TIME; isPlaying = true; isProcessing = false; isRevealed = false;
     document.getElementById('score').innerText = score;
-
+    
     // UI Updates
     document.getElementById('start-btn').style.display = 'none';
-    document.getElementById('settings-div').style.display = 'none';
-
+    document.getElementById('settings-div').style.display = 'none'; 
+    
     const inputArea = document.getElementById('input-area');
     const gameControls = document.getElementById('game-controls');
     const fcControls = document.getElementById('fc-controls');
@@ -127,7 +127,7 @@ function startGame() {
         
         const input = document.getElementById('answer-input');
         input.disabled = false; input.value = ""; input.focus();
-
+        
         if (!timerEnabled) {
             timerTxt.innerText = "∞"; timerTxt.style.color = "var(--accent)";
             document.getElementById('visual-timer').style.width = "100%";
@@ -140,12 +140,12 @@ function startGame() {
 function buildQueue() {
     const selectedUnit = document.getElementById('unit-select').value;
     const starOnly = document.getElementById('star-only-check').checked;
-
+    
     activeQueue = activeDB.filter(item => {
         const level = parseInt(progressMap[item.w] || 0);
-        const notMastered = level < 2;
+        const notMastered = level < 2; 
         const unitMatch = (selectedUnit === 'all') || (item.u.toString() === selectedUnit);
-        const starMatch = !starOnly || starredMap[item.w];
+        const starMatch = !starOnly || starredMap[item.w]; 
         return notMastered && unitMatch && starMatch;
     });
 }
@@ -160,7 +160,7 @@ function gameLoop() {
         let pct = (timer / VISUAL_MAX_TIME) * 100;
         if (pct > 100) pct = 100; if (pct < 0) pct = 0;
         bar.style.width = pct + "%";
-        if (timer <= 10) { bar.className = "timer-fill danger"; timerEl.style.color = "var(--danger)"; }
+        if (timer <= 10) { bar.className = "timer-fill danger"; timerEl.style.color = "var(--danger)"; } 
         else { bar.className = "timer-fill"; timerEl.style.color = "var(--accent)"; }
         if (timer <= 0) gameOver();
     }
@@ -169,8 +169,8 @@ function gameLoop() {
 // --- NEXTWORD ---
 function nextWord() {
     if (activeQueue.length === 0) { endGameVictory(); return; }
-
-    isReviewWord = false;
+    
+    isReviewWord = false; 
     const starOnly = document.getElementById('star-only-check').checked;
     const selectedUnit = document.getElementById('unit-select').value;
 
@@ -185,17 +185,17 @@ function nextWord() {
         if (masteryRatio > 0.5 && Math.random() < 0.10) {
             if (masteredInScope.length > 0) {
                 currentItem = masteredInScope[Math.floor(Math.random() * masteredInScope.length)];
-                isReviewWord = true;
+                isReviewWord = true; 
             }
         }
     }
-
+    
     if (!isReviewWord) {
         let candidates = [...activeQueue];
         if (candidates.length > 1 && currentItem) candidates = candidates.filter(w => w.w !== currentItem.w);
         currentItem = candidates[Math.floor(Math.random() * candidates.length)];
     }
-
+    
     isRevealed = false;
     document.getElementById('btn-show-answer').style.display = 'block';
     document.getElementById('fc-rating-btns').style.display = 'none';
@@ -205,7 +205,7 @@ function nextWord() {
 function renderGameUI() {
     const area = document.getElementById('definition-area');
     area.classList.remove('fc-feedback-good', 'fc-feedback-bad');
-
+    
     let contentHtml = "";
 
     if (currentMode === 'flashcards') {
@@ -242,8 +242,8 @@ document.getElementById('answer-input').addEventListener('input', (e) => {
             localStorage.setItem('vocab_progress_v2', JSON.stringify(progressMap));
             localStorage.setItem('vocab_starred', JSON.stringify(starredMap));
             refreshStats();
-
-            passWord(false, true);
+            
+            passWord(false, true); 
         }
     }
 });
@@ -255,7 +255,7 @@ function passWord(skipVisuals = false, isConfusion = false) {
     if (currentMode !== 'flashcards' && !skipVisuals) {
         const inputEl = document.getElementById('answer-input');
         inputEl.classList.add('flash-red');
-        inputEl.value = "Antwoord: " + currentItem.w;
+        inputEl.value = "Antwoord: " + currentItem.w; 
         setTimeout(() => { inputEl.classList.remove('flash-red'); nextWord(); }, 1000);
     } else {
         if (currentMode === 'flashcards') nextWord();
@@ -276,12 +276,12 @@ function handleCorrect(skipVisuals = false) {
     }
     if (!isReviewWord) {
         let lvl = parseInt(progressMap[currentItem.w] || 0);
-        if (lvl === -1) lvl = 1;
-        else if (lvl === 0) lvl = 1;
+        if (lvl === -1) lvl = 1; 
+        else if (lvl === 0) lvl = 1; 
         else if (lvl === 1) lvl = 2;
-
+        
         progressMap[currentItem.w] = lvl;
-
+        
         if (lvl === 2) {
             activeQueue = activeQueue.filter(i => i.w !== currentItem.w);
         }
@@ -307,29 +307,58 @@ window.handleFlashcardResult = function(success) {
     if (success) area.classList.add('fc-feedback-good'); else area.classList.add('fc-feedback-bad');
     setTimeout(() => {
         if (success) handleCorrect(true); else passWord(true);
-        isProcessing = false;
+        isProcessing = false; 
     }, 500);
 }
 
 function refreshStats() {
     if (!activeDB || activeDB.length === 0) return;
 
-    let counts = { "-1": 0, "0": 0, "1": 0, "2": 0 }; let starCount = 0;
-    activeDB.forEach(i => { let l=progressMap[i.w]; if(l===undefined)l=0; counts[l]++; if(starredMap[i.w]) starCount++; });
+    // 1. Haal geselecteerde unit op
+    const selectedUnit = document.getElementById('unit-select').value;
 
-    document.getElementById('cnt-new').innerText = counts[0];
+    // 2. Filter de database op deze unit (of 'all')
+    const filteredDB = activeDB.filter(item => {
+        return selectedUnit === 'all' || item.u.toString() === selectedUnit;
+    });
+
+    // 3. Tel statistieken op basis van de GEFILTERDE lijst
+    let counts = { "-1": 0, "0": 0, "1": 0, "2": 0 };
+    let starCount = 0;
+
+    filteredDB.forEach(i => {
+        let l = parseInt(progressMap[i.w] || 0);
+        counts[l]++;
+        if(starredMap[i.w]) starCount++;
+    });
+    
+    // 4. Update de UI
+    document.getElementById('cnt-new').innerText = counts[0]; 
     document.getElementById('cnt-bad').innerText = counts[-1];
-    document.getElementById('cnt-good').innerText = counts[1];
+    document.getElementById('cnt-good').innerText = counts[1]; 
     document.getElementById('cnt-full').innerText = counts[2];
     document.getElementById('cnt-star').innerText = "★ " + starCount;
-
-    const sel = document.getElementById('unit-select').value; const sOnly = document.getElementById('star-only-check').checked;
-
-    const rel = activeDB.filter(i => ((sel==='all'||i.u.toString()===sel) && (!sOnly||starredMap[i.w])));
-    let pts = 0; rel.forEach(i => { let l=progressMap[i.w]; if(l===2)pts+=3; else if(l===1)pts+=2; else if(l===-1)pts+=1; });
-    const max = rel.length * 3; const pct = max>0 ? ((pts/max)*100).toFixed(2) : "0.00";
-    document.getElementById('mastery-bar').style.width = pct + "%"; document.getElementById('mastery-pct').innerText = pct + "%";
-    document.getElementById('progress-label-text').innerText = (sel!=='all'?`UNIT ${sel}`:"TOTAAL") + (sOnly?" (★)":"");
+    
+    // Progress Bar Logica (Houdt ook rekening met ster-filter voor de bar zelf)
+    const sOnly = document.getElementById('star-only-check').checked;
+    
+    // Voor de progress bar filteren we NOG dieper (ook op sterren als dat aanstaat)
+    const rel = filteredDB.filter(i => (!sOnly || starredMap[i.w]));
+    
+    let pts = 0; 
+    rel.forEach(i => { 
+        let l = parseInt(progressMap[i.w] || 0); 
+        if(l===2) pts+=3; 
+        else if(l===1) pts+=2; 
+        else if(l===-1) pts+=1; 
+    });
+    
+    const max = rel.length * 3; 
+    const pct = max > 0 ? ((pts/max)*100).toFixed(2) : "0.00";
+    
+    document.getElementById('mastery-bar').style.width = pct + "%"; 
+    document.getElementById('mastery-pct').innerText = pct + "%";
+    document.getElementById('progress-label-text').innerText = (selectedUnit!=='all'?`UNIT ${selectedUnit}`:"TOTAAL") + (sOnly?" (★)":"");
 }
 
 function populateUnitDropdown() {
@@ -338,8 +367,12 @@ function populateUnitDropdown() {
 
     [...new Set(activeDB.map(i=>i.u))].sort((a,b)=>a-b).forEach(u => {
         let o=document.createElement('option'); o.value=u;
-        let tot=activeDB.filter(w=>w.u===u).length; let mast=activeDB.filter(w=>w.u===u && progressMap[w.w]===2).length;
-        o.innerText = (tot>0&&tot===mast) ? `Unit ${u} (VOLTOOID)` : `Unit ${u}`; s.appendChild(o);
+        // Check of unit voltooid is (handig voor de gebruiker)
+        let tot = activeDB.filter(w=>w.u===u).length; 
+        let mast = activeDB.filter(w=>w.u===u && parseInt(progressMap[w.w]||0)===2).length;
+        
+        o.innerText = (tot>0 && tot===mast) ? `Unit ${u} (VOLTOOID)` : `Unit ${u}`; 
+        s.appendChild(o);
     });
     const saved = localStorage.getItem('vocab_last_unit'); if(saved) { const o=s.querySelector(`option[value="${saved}"]`); if(o) s.value=saved; }
 }
@@ -395,20 +428,29 @@ function showList(t) {
 
     if (!activeDB) return;
 
+    // 1. Haal de geselecteerde unit op uit de dropdown
+    const selectedUnit = document.getElementById('unit-select').value;
+
+    // 2. Filter de database op deze unit (of 'all')
+    const filteredDB = activeDB.filter(item => {
+        return selectedUnit === 'all' || item.u.toString() === selectedUnit;
+    });
+
+    // 3. Toon alleen woorden uit deze unit die aan de criteria (t) voldoen
     if(t==='star'){
-        h.innerText="Gemarkeerd"; c="var(--gold)";
-        w=activeDB.filter(i=>starredMap[i.w]);
+        h.innerText="Gemarkeerd (in deze unit)"; c="var(--gold)";
+        w=filteredDB.filter(i=>starredMap[i.w]);
     } else {
         const labels = {0:"Niet Gekend",'-1':"Slecht Gekend",1:"Goed Gekend",2:"Volledig Gekend"};
         const colors = {0:"#94a3b8",'-1':"var(--danger)",1:"var(--gold)",2:"var(--success)"};
         h.innerText=labels[t]; c=colors[t];
-        w=activeDB.filter(i=>(parseInt(progressMap[i.w]||0)===t));
+        w=filteredDB.filter(i=>(parseInt(progressMap[i.w]||0)===t));
     }
 
     h.style.color=c; b.innerHTML="";
 
     if(w.length === 0) {
-        b.innerHTML = "<div style='text-align:center; padding:20px; color:#666;'>Geen woorden in deze lijst.</div>";
+        b.innerHTML = "<div style='text-align:center; padding:20px; color:#666;'>Geen woorden gevonden in deze categorie (voor deze unit).</div>";
     } else {
         w.forEach(i=>{
             const d=document.createElement('div');
