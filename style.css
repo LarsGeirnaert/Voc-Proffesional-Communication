@@ -25,7 +25,6 @@ body {
     min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box;
 }
 
-/* CONFETTI */
 #confetti-canvas {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     pointer-events: none; z-index: 9999;
@@ -69,13 +68,11 @@ body {
     position: relative; overflow: hidden;
 }
 
-/* Progress Bar */
 .progress-section { margin-bottom: 25px; }
 .progress-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.9rem; color: var(--accent); font-weight: bold; }
 .progress-track { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; }
 .progress-fill { height: 100%; background: var(--accent); width: 0%; box-shadow: 0 0 10px var(--accent-glow); transition: width 0.5s ease; }
 
-/* HUD & Timer */
 .hud { display: flex; justify-content: space-between; font-size: 1.2rem; font-weight: bold; margin-bottom: 10px; color: var(--text-muted); }
 #score { color: var(--text-main); }
 #timer { font-family: monospace; color: var(--accent); }
@@ -84,7 +81,6 @@ body {
 .timer-fill { height: 100%; width: 0%; background: var(--accent); transition: width 0.1s linear; }
 .timer-fill.danger { background: var(--danger); box-shadow: 0 0 10px var(--danger); }
 
-/* DEFINITION AREA */
 .definition-box {
     min-height: 140px; display: flex; flex-direction: column; align-items: center; justify-content: center;
     font-size: 1.4rem; line-height: 1.5; margin-bottom: 30px; text-align: center;
@@ -94,20 +90,11 @@ body {
 .fc-feedback-good { border-color: var(--success); box-shadow: 0 0 20px rgba(16, 185, 129, 0.2); }
 .fc-feedback-bad { border-color: var(--danger); box-shadow: 0 0 20px rgba(244, 63, 94, 0.2); }
 
-/* SCRAMBLE TEXT STYLE */
-.scrambled-text {
-    margin-top: 15px; font-family: 'Courier New', monospace; font-size: 1.8rem;
-    color: var(--accent); letter-spacing: 5px; text-transform: uppercase; font-weight: bold;
-    text-shadow: 0 0 10px var(--accent-glow);
-}
-
-/* Flashcards Flip */
 .flashcard-content { width: 100%; height: 100%; cursor: pointer; perspective: 1000px; transform-style: preserve-3d; transition: transform 0.6s; }
 .flashcard-content.flipped { transform: rotateY(180deg); }
 .fc-face { backface-visibility: hidden; position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
 .fc-back { transform: rotateY(180deg); color: var(--accent); font-weight: bold; font-size: 1.8rem; }
 
-/* INPUT */
 .input-group { margin-bottom: 20px; }
 input[type="text"] {
     width: 100%; padding: 18px; font-size: 1.4rem; border-radius: 12px;
@@ -118,7 +105,6 @@ input[type="text"]:focus { border-color: var(--accent); box-shadow: 0 0 15px var
 .flash-green { border-color: var(--success) !important; box-shadow: 0 0 20px var(--success); }
 .flash-red { border-color: var(--danger) !important; box-shadow: 0 0 20px var(--danger); }
 
-/* CONTROLS */
 .controls { display: flex; gap: 12px; margin-bottom: 20px; }
 .btn {
     flex: 1; padding: 14px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 1rem;
@@ -136,39 +122,22 @@ input[type="text"]:focus { border-color: var(--accent); box-shadow: 0 0 15px var
 .btn-fc-bad { background: var(--danger); color: white; }
 .btn-fc-good { background: var(--success); color: white; }
 
-/* SETTINGS BAR */
-.settings-row {
-    margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--glass-border);
-    display: flex; justify-content: center; gap: 15px; flex-wrap: wrap;
-}
-.setting-item {
-    background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white;
-    padding: 8px 12px; border-radius: 8px; outline: none; cursor: pointer; font-size: 0.9rem;
-}
+.settings-row { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--glass-border); display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; }
+.setting-item { background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; padding: 8px 12px; border-radius: 8px; outline: none; cursor: pointer; font-size: 0.9rem; }
 .setting-item:hover { border-color: var(--accent); }
 option { background: #0f172a; }
 
-/* --- DANGER ZONE (RESET) --- */
-.danger-zone {
-    width: 100%; max-width: 700px; margin-top: 40px; margin-bottom: 60px;
-    background: rgba(244, 63, 94, 0.05); border: 1px solid rgba(244, 63, 94, 0.2);
-    border-radius: 12px; padding: 20px; text-align: center;
-}
+.danger-zone { width: 100%; max-width: 700px; margin-top: 40px; margin-bottom: 60px; background: rgba(244, 63, 94, 0.05); border: 1px solid rgba(244, 63, 94, 0.2); border-radius: 12px; padding: 20px; text-align: center; }
 .danger-title { color: var(--danger); font-size: 0.9rem; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; }
 .danger-grid { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 
-.btn-danger-action {
-    background: transparent; border: 1px solid rgba(255,255,255,0.2); color: var(--text-muted);
-    padding: 10px 15px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; flex: 1; min-width: 120px;
-    transition: all 0.2s;
-}
+.btn-danger-action { background: transparent; border: 1px solid rgba(255,255,255,0.2); color: var(--text-muted); padding: 10px 15px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; flex: 1; min-width: 120px; transition: all 0.2s; }
 .btn-danger-action:hover { background: rgba(255,255,255,0.1); color: white; }
 .btn-danger-action.critical { border-color: var(--danger); color: var(--danger); }
 .btn-danger-action.critical:hover { background: var(--danger); color: white; }
 .btn-danger-action.data { border-color: var(--accent); color: var(--accent); }
 .btn-danger-action.data:hover { background: var(--accent); color: #000; }
 
-/* Modal */
 .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); z-index: 1000; justify-content: center; align-items: center; }
 .modal-content { background: #1e293b; width: 90%; max-width: 500px; border-radius: 12px; padding: 20px; border: 1px solid var(--glass-border); box-shadow: 0 20px 50px rgba(0,0,0,0.5); max-height: 80vh; display: flex; flex-direction: column; }
 .word-list { overflow-y: auto; flex: 1; }
