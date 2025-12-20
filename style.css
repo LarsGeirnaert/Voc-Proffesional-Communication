@@ -2,17 +2,17 @@
     --bg-color: #0f172a;
     --card-bg: rgba(30, 41, 59, 0.7);
     --glass-border: rgba(255, 255, 255, 0.1);
-    
+
     --text-main: #f1f5f9;
     --text-muted: #94a3b8;
-    
+
     --accent: #06b6d4;    /* Cyan */
     --accent-glow: rgba(6, 182, 212, 0.4);
-    
+
     --danger: #f43f5e;    /* Pink/Red */
     --success: #10b981;   /* Emerald */
     --gold: #f59e0b;      /* Amber */
-    
+
     --font-stack: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
@@ -30,42 +30,85 @@ body {
     pointer-events: none; z-index: 9999;
 }
 
-/* --- DASHBOARD GRID --- */
-.dashboard {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-    gap: 12px; width: 100%; max-width: 800px; margin-bottom: 30px;
+/* --- MAIN LAYOUT (3 COLUMNS) --- */
+.app-header { width: 100%; max-width: 1200px; display: flex; justify-content: center; align-items: center; margin-bottom: 20px; text-align: center; }
+
+.main-layout {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 20px;
+    width: 100%;
+    max-width: 1300px;
 }
 
-.stat-card {
+.side-panel {
+    width: 220px;
     background: var(--card-bg);
     border: 1px solid var(--glass-border);
-    backdrop-filter: blur(10px);
     border-radius: 12px;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.panel-title {
+    font-size: 0.9rem; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: 1px; font-weight: bold; text-align: center; margin-bottom: 10px;
+    border-bottom: 1px solid var(--glass-border); padding-bottom: 5px;
+}
+
+.dashboard-vertical { display: flex; flex-direction: column; gap: 10px; }
+.danger-grid-vertical { display: flex; flex-direction: column; gap: 8px; }
+
+.stat-card {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(10px);
+    border-radius: 8px;
     padding: 10px; text-align: center;
     cursor: pointer; transition: all 0.2s ease;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
 }
-.stat-card:hover { transform: translateY(-3px); border-color: var(--accent); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+.stat-card:hover { transform: translateY(-2px); border-color: var(--accent); }
+.stat-card.new { border-left: 3px solid #94a3b8; }
+.stat-card.bad { border-left: 3px solid var(--danger); }
+.stat-card.good { border-left: 3px solid #facc15; }
+.stat-card.full { border-left: 3px solid var(--success); }
+.stat-card.starred { border: 1px solid var(--gold); }
 
-.stat-card.new { border-bottom: 3px solid #94a3b8; }
-.stat-card.bad { border-bottom: 3px solid var(--danger); }
-.stat-card.good { border-bottom: 3px solid #facc15; }
-.stat-card.full { border-bottom: 3px solid var(--success); }
-.stat-card.starred { border: 1px solid var(--gold); box-shadow: 0 0 10px rgba(245, 158, 11, 0.1); }
+.count { font-size: 1.5rem; font-weight: 800; display: block; }
+.label { font-size: 0.7rem; text-transform: uppercase; color: var(--text-muted); margin-top: 2px; }
 
-.count { font-size: 1.8rem; font-weight: 800; display: block; }
-.label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-top: 4px; }
-
-/* --- GAME CONTAINER --- */
+/* --- GAME CONTAINER (CENTER) --- */
 .game-container {
-    width: 100%; max-width: 700px;
+    flex-grow: 1;
+    max-width: 600px;
     background: var(--card-bg);
     border: 1px solid var(--glass-border);
     backdrop-filter: blur(12px);
     border-radius: 20px;
-    padding: 40px;
+    padding: 30px;
     box-shadow: 0 20px 50px rgba(0,0,0,0.5);
     position: relative; overflow: hidden;
+}
+
+@media (max-width: 900px) {
+    .main-layout { flex-direction: column; align-items: center; }
+    .side-panel { width: 100%; max-width: 600px; }
+    .dashboard-vertical { flex-direction: row; flex-wrap: wrap; justify-content: center; }
+    .stat-card { flex: 1; min-width: 80px; border-left: none; border-bottom: 3px solid transparent; }
+
+    .stat-card.new { border-bottom-color: #94a3b8; }
+    .stat-card.bad { border-bottom-color: var(--danger); }
+    .stat-card.good { border-bottom-color: #facc15; }
+    .stat-card.full { border-bottom-color: var(--success); }
+
+    .danger-grid-vertical { flex-direction: row; flex-wrap: wrap; }
+    .btn-danger-action { flex: 1; }
 }
 
 .progress-section { margin-bottom: 25px; }
@@ -81,6 +124,7 @@ body {
 .timer-fill { height: 100%; width: 0%; background: var(--accent); transition: width 0.1s linear; }
 .timer-fill.danger { background: var(--danger); box-shadow: 0 0 10px var(--danger); }
 
+/* --- FLASHCARDS & DEFINITIONS (HOVER EFFECTS) --- */
 .definition-box {
     min-height: 140px; display: flex; flex-direction: column; align-items: center; justify-content: center;
     font-size: 1.4rem; line-height: 1.5; margin-bottom: 30px; text-align: center;
@@ -90,7 +134,24 @@ body {
 .fc-feedback-good { border-color: var(--success); box-shadow: 0 0 20px rgba(16, 185, 129, 0.2); }
 .fc-feedback-bad { border-color: var(--danger); box-shadow: 0 0 20px rgba(244, 63, 94, 0.2); }
 
-.flashcard-content { width: 100%; height: 100%; cursor: pointer; perspective: 1000px; transform-style: preserve-3d; transition: transform 0.6s; }
+.flashcard-content {
+    width: 100%; height: 100%;
+    cursor: pointer;
+    perspective: 1000px;
+    transform-style: preserve-3d;
+    transition: transform 0.6s, box-shadow 0.3s, transform 0.3s;
+    border-radius: 12px;
+}
+
+/* HOVER EFFECT OP KAART */
+.flashcard-content:hover {
+    transform: scale(1.02);
+    box-shadow: 0 0 25px rgba(6, 182, 212, 0.15); /* Subtiele cyaan gloed */
+}
+.flashcard-content.flipped:hover {
+    transform: rotateY(180deg) scale(1.02); /* Behoud de flip tijdens hover */
+}
+
 .flashcard-content.flipped { transform: rotateY(180deg); }
 .fc-face { backface-visibility: hidden; position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
 .fc-back { transform: rotateY(180deg); color: var(--accent); font-weight: bold; font-size: 1.8rem; }
@@ -105,33 +166,72 @@ input[type="text"]:focus { border-color: var(--accent); box-shadow: 0 0 15px var
 .flash-green { border-color: var(--success) !important; box-shadow: 0 0 20px var(--success); }
 .flash-red { border-color: var(--danger) !important; box-shadow: 0 0 20px var(--danger); }
 
+/* --- CONTROLS & HOVER EFFECTS --- */
 .controls { display: flex; gap: 12px; margin-bottom: 20px; }
-.btn {
-    flex: 1; padding: 14px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 1rem;
-    transition: transform 0.1s, filter 0.2s; text-transform: uppercase;
-}
-.btn:active { transform: scale(0.98); }
+.btn { flex: 1; padding: 14px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 1rem; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); text-transform: uppercase; position: relative; overflow: hidden; }
+.btn:active { transform: scale(0.95); }
 
+/* Start Game Button */
 .btn-start { background: linear-gradient(135deg, var(--accent), #3b82f6); color: white; width: 100%; font-size: 1.2rem; box-shadow: 0 4px 15px var(--accent-glow); }
-.btn-pass { background: rgba(244, 63, 94, 0.1); color: var(--danger); border: 1px solid var(--danger); }
-.btn-pass:hover { background: var(--danger); color: white; }
-.btn-stop { background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid rgba(255,255,255,0.1); }
-.btn-stop:hover { background: rgba(255,255,255,0.1); color: white; }
+.btn-start:hover { box-shadow: 0 0 25px var(--accent-glow); filter: brightness(1.1); transform: translateY(-2px); }
 
-.btn-show { background: var(--accent); color: #000; width: 100%; }
-.btn-fc-bad { background: var(--danger); color: white; }
-.btn-fc-good { background: var(--success); color: white; }
+/* Pass Button (Overdrive) */
+.btn-pass { background: rgba(244, 63, 94, 0.1); color: var(--danger); border: 1px solid var(--danger); }
+.btn-pass:hover { background: var(--danger); color: white; box-shadow: 0 0 15px rgba(244, 63, 94, 0.5); transform: translateY(-2px); }
+
+/* STOP BUTTON (REDESIGNED) */
+.btn-stop {
+    background: transparent;
+    color: #64748b;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 50px; /* Pill shape */
+    padding: 8px 30px;
+    font-size: 0.8rem;
+    letter-spacing: 2px;
+    transition: all 0.3s ease;
+}
+.btn-stop:hover {
+    border-color: var(--danger);
+    color: var(--danger);
+    background: rgba(244, 63, 94, 0.05);
+    box-shadow: 0 0 10px rgba(244, 63, 94, 0.2);
+    transform: scale(1.05);
+}
+
+/* Flashcard: Toon Antwoord */
+.btn-show { background: var(--accent); color: #000; width: 100%; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+.btn-show:hover {
+    background: #22d3ee; /* Lighter cyan */
+    box-shadow: 0 0 20px var(--accent-glow);
+    transform: translateY(-3px);
+}
+
+/* Flashcard: 1. Nog Niet (Fout) */
+.btn-fc-bad { background: var(--danger); color: white; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+.btn-fc-bad:hover {
+    background: #fb7185; /* Lighter red */
+    box-shadow: 0 0 20px rgba(244, 63, 94, 0.6);
+    transform: translateY(-3px);
+}
+
+/* Flashcard: 2. Ik Wist Hem (Goed) */
+.btn-fc-good { background: var(--success); color: white; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+.btn-fc-good:hover {
+    background: #34d399; /* Lighter green */
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.6);
+    transform: translateY(-3px);
+}
 
 .settings-row { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--glass-border); display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; }
-.setting-item { background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; padding: 8px 12px; border-radius: 8px; outline: none; cursor: pointer; font-size: 0.9rem; }
-.setting-item:hover { border-color: var(--accent); }
+.setting-item { background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; padding: 8px 12px; border-radius: 8px; outline: none; cursor: pointer; font-size: 0.9rem; transition: 0.2s; }
+.setting-item:hover { border-color: var(--accent); box-shadow: 0 0 10px rgba(6, 182, 212, 0.2); }
 option { background: #0f172a; }
 
-.danger-zone { width: 100%; max-width: 700px; margin-top: 40px; margin-bottom: 60px; background: rgba(244, 63, 94, 0.05); border: 1px solid rgba(244, 63, 94, 0.2); border-radius: 12px; padding: 20px; text-align: center; }
-.danger-title { color: var(--danger); font-size: 0.9rem; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; }
-.danger-grid { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
-
-.btn-danger-action { background: transparent; border: 1px solid rgba(255,255,255,0.2); color: var(--text-muted); padding: 10px 15px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; flex: 1; min-width: 120px; transition: all 0.2s; }
+.btn-danger-action {
+    background: transparent; border: 1px solid rgba(255,255,255,0.2); color: var(--text-muted);
+    padding: 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; width: 100%;
+    transition: all 0.2s; text-align: center;
+}
 .btn-danger-action:hover { background: rgba(255,255,255,0.1); color: white; }
 .btn-danger-action.critical { border-color: var(--danger); color: var(--danger); }
 .btn-danger-action.critical:hover { background: var(--danger); color: white; }

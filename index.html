@@ -10,111 +10,124 @@
 <body>
     <canvas id="confetti-canvas"></canvas>
 
-    <div class="dashboard">
-        <div class="stat-card new" onclick="showList(0)">
-            <span class="count" id="cnt-new">0</span>
-            <span class="label">Niet Gekend</span>
-        </div>
-        <div class="stat-card bad" onclick="showList(-1)">
-            <span class="count" id="cnt-bad">0</span>
-            <span class="label">Slecht</span>
-        </div>
-        <div class="stat-card good" onclick="showList(1)">
-            <span class="count" id="cnt-good">0</span>
-            <span class="label">Goed</span>
-        </div>
-        <div class="stat-card full" onclick="showList(2)">
-            <span class="count" id="cnt-full">0</span>
-            <span class="label">Volledig</span>
-        </div>
-        <div class="stat-card starred" onclick="showList('star')">
-            <span class="count" id="cnt-star">★ 0</span>
-            <span class="label">Marked</span>
-        </div>
+    <div class="app-header">
+        <h2 style="margin:0; color:var(--accent); text-transform: uppercase; letter-spacing: 2px;">Professional Communication</h2>
     </div>
 
-    <div class="game-container">
-        
-        <div class="progress-section">
-            <div class="progress-header">
-                <span id="progress-label-text">HUIDIGE SELECTIE</span>
-                <span id="mastery-pct">0.00%</span>
-            </div>
-            <div class="progress-track">
-                <div class="progress-fill" id="mastery-bar"></div>
+    <div class="main-layout">
+
+        <div class="side-panel left-panel">
+            <div class="panel-title">Statistieken</div>
+            <div class="dashboard-vertical">
+                <div class="stat-card new" onclick="showList(0)">
+                    <span class="count" id="cnt-new">0</span>
+                    <span class="label">Niet Gekend</span>
+                </div>
+                <div class="stat-card bad" onclick="showList(-1)">
+                    <span class="count" id="cnt-bad">0</span>
+                    <span class="label">Slecht</span>
+                </div>
+                <div class="stat-card good" onclick="showList(1)">
+                    <span class="count" id="cnt-good">0</span>
+                    <span class="label">Goed</span>
+                </div>
+                <div class="stat-card full" onclick="showList(2)">
+                    <span class="count" id="cnt-full">0</span>
+                    <span class="label">Volledig</span>
+                </div>
+                <div class="stat-card starred" onclick="showList('star')">
+                    <span class="count" id="cnt-star">★ 0</span>
+                    <span class="label">Marked</span>
+                </div>
             </div>
         </div>
 
-        <div class="hud">
-            <span>Score: <span id="score">0</span></span>
-            <span id="timer">25.0s</span>
-        </div>
-        <div class="timer-track" id="timer-container-div">
-            <div class="timer-fill" id="visual-timer"></div>
+        <div class="game-container">
+            <div class="progress-section">
+                <div class="progress-header">
+                    <span id="progress-label-text">HUIDIGE SELECTIE</span>
+                    <span id="mastery-pct">0.00%</span>
+                </div>
+                <div class="progress-track">
+                    <div class="progress-fill" id="mastery-bar"></div>
+                </div>
+            </div>
+
+            <div class="hud">
+                <span>Score: <span id="score">0</span></span>
+                <span id="timer">25.0s</span>
+            </div>
+            <div class="timer-track" id="timer-container-div">
+                <div class="timer-fill" id="visual-timer"></div>
+            </div>
+
+            <div class="definition-box" id="definition-area">
+                Selecteer een mode en klik op START.
+            </div>
+
+            <div class="input-group" id="input-area">
+                <input type="text" id="answer-input" placeholder="Type het woord..." disabled autocomplete="off">
+            </div>
+
+            <div class="controls" id="game-controls" style="display:none;">
+                <button class="btn btn-pass" onclick="passWord()">PASS</button>
+                <button class="btn btn-stop" onclick="stopGame()">STOP</button>
+            </div>
+
+            <div class="fc-controls" id="fc-controls" style="display:none;">
+                 <button id="btn-show-answer" class="btn btn-show" onclick="revealFlashcard()">Toon Antwoord</button>
+                 <div id="fc-rating-btns" class="fc-rating-row" style="display:none; width:100%; gap:10px;">
+                     <button class="btn btn-fc-bad" onclick="handleFlashcardResult(false)">1. Nog niet</button>
+                     <button class="btn btn-fc-good" onclick="handleFlashcardResult(true)">2. Ik wist hem</button>
+                 </div>
+            </div>
+            <div id="fc-stop-controls" style="display:none; width:100%; text-align:center; margin-top:10px;">
+                 <button class="btn btn-stop" onclick="stopGame()">STOP</button>
+            </div>
+
+            <button class="btn btn-start" id="start-btn" onclick="startGame()">START GAME</button>
+
+            <div class="settings-row" id="settings-div">
+                <select id="mode-select" class="setting-item" onchange="toggleSettingsUI()">
+                    <option value="overdrive">🚀 Overdrive</option>
+                    <option value="flashcards">🎴 Flashcards</option>
+                </select>
+
+                <select id="unit-select" class="setting-item" onchange="handleSettingsChange()">
+                    <option value="all">Alle Units</option>
+                </select>
+
+                <label class="setting-item" title="Alleen sterren">
+                    <input type="checkbox" id="star-only-check" onchange="handleSettingsChange()"> ★ Only
+                </label>
+
+                <label class="setting-item" id="timer-toggle-label">
+                    <input type="checkbox" id="timer-check" checked> Tijd
+                </label>
+            </div>
         </div>
 
-        <div class="definition-box" id="definition-area">
-            Selecteer een mode en klik op START.
+        <div class="side-panel right-panel">
+            <div class="panel-title">Data & Reset</div>
+            <div class="danger-grid-vertical">
+                <button class="btn-danger-action data" onclick="exportData()">💾 Opslaan</button>
+                <button class="btn-danger-action data" onclick="document.getElementById('import-file').click()">📂 Laden</button>
+                <input type="file" id="import-file" style="display:none" onchange="importData(this)">
+
+                <div style="height:10px;"></div>
+
+                <button class="btn-danger-action" onclick="resetSpecificUnit()">Reset Unit...</button>
+                <button class="btn-danger-action" onclick="resetStarredToNew()">Reset ★ (0)</button>
+                <button class="btn-danger-action" onclick="unstarAll()">Verwijder ★</button>
+
+                <div style="height:10px;"></div>
+
+                <button class="btn-danger-action critical" onclick="resetProgress()">⚠ RESET ALLES</button>
+            </div>
         </div>
 
-        <div class="input-group" id="input-area">
-            <input type="text" id="answer-input" placeholder="Type het woord..." disabled autocomplete="off">
-        </div>
-
-        <div class="controls" id="game-controls" style="display:none;">
-            <button class="btn btn-pass" onclick="passWord()">PASS</button>
-            <button class="btn btn-stop" onclick="stopGame()">STOP</button>
-        </div>
-
-        <div class="fc-controls" id="fc-controls" style="display:none;">
-             <button id="btn-show-answer" class="btn btn-show" onclick="revealFlashcard()">Toon Antwoord</button>
-             <div id="fc-rating-btns" class="fc-rating-row" style="display:none; width:100%; gap:10px;">
-                 <button class="btn btn-fc-bad" onclick="handleFlashcardResult(false)">1. Nog niet</button>
-                 <button class="btn btn-fc-good" onclick="handleFlashcardResult(true)">2. Ik wist hem</button>
-             </div>
-        </div>
-        <div id="fc-stop-controls" style="display:none; width:100%; text-align:center; margin-top:10px;">
-             <button class="btn btn-stop" onclick="stopGame()">STOP</button>
-        </div>
-
-        <button class="btn btn-start" id="start-btn" onclick="startGame()">START GAME</button>
-
-        <div class="settings-row" id="settings-div">
-            <select id="mode-select" class="setting-item" onchange="toggleSettingsUI()">
-                <option value="overdrive">🚀 Overdrive</option>
-                <option value="flashcards">🎴 Flashcards</option>
-            </select>
-
-            <select id="unit-select" class="setting-item" onchange="handleSettingsChange()">
-                <option value="all">Alle Units</option>
-            </select>
-            
-            <label class="setting-item" title="Alleen sterren">
-                <input type="checkbox" id="star-only-check" onchange="handleSettingsChange()"> ★ Only
-            </label>
-            
-            <label class="setting-item" id="timer-toggle-label">
-                <input type="checkbox" id="timer-check" checked> Tijd
-            </label>
-        </div>
-    </div>
-
-    <div class="danger-zone">
-        <div class="danger-title">Data Management & Reset</div>
-        <div class="danger-grid">
-            <button class="btn-danger-action data" onclick="exportData()">💾 Save</button>
-            <button class="btn-danger-action data" onclick="document.getElementById('import-file').click()">📂 Load</button>
-            <input type="file" id="import-file" style="display:none" onchange="importData(this)">
-            
-            <button class="btn-danger-action" onclick="resetSpecificUnit()">Reset Unit...</button>
-            
-            <button class="btn-danger-action" onclick="resetStarredToNew()">Reset ★ (naar 0)</button>
-            <button class="btn-danger-action" onclick="unstarAll()">Verwijder ★</button>
-            
-            <button class="btn-danger-action critical" onclick="resetProgress()">⚠ RESET ALLES</button>
-        </div>
-    </div>
-
+    </div> 
+    
     <div class="modal" id="list-modal">
         <div class="modal-content">
             <div class="modal-header" style="display:flex;justify-content:space-between;color:white;border-bottom:1px solid #333;padding-bottom:10px;margin-bottom:10px;">
