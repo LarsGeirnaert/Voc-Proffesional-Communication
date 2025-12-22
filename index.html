@@ -18,7 +18,8 @@
 
         <div class="side-panel left-panel">
             <div class="panel-title">Statistieken</div>
-            <div class="dashboard-vertical">
+            
+            <div class="dashboard-vertical" id="global-stats">
                 <div class="stat-card new" onclick="showList(0)">
                     <span class="count" id="cnt-new">0</span>
                     <span class="label">Niet Gekend</span>
@@ -38,6 +39,21 @@
                 <div class="stat-card starred" onclick="showList('star')">
                     <span class="count" id="cnt-star">★ 0</span>
                     <span class="label">Marked</span>
+                </div>
+            </div>
+
+            <div class="dashboard-vertical" id="session-stats" style="display:none;">
+                <div class="stat-card" style="border-left: 4px solid #fff;">
+                    <span class="count" id="sess-remaining">25</span>
+                    <span class="label">Nog te gaan</span>
+                </div>
+                <div class="stat-card good" style="cursor:default;">
+                    <span class="count" id="sess-correct">0</span>
+                    <span class="label">Goed</span>
+                </div>
+                <div class="stat-card bad" style="cursor:default;">
+                    <span class="count" id="sess-wrong">0</span>
+                    <span class="label">Fout</span>
                 </div>
             </div>
 
@@ -97,13 +113,13 @@
                 <select id="mode-select" class="setting-item" onchange="toggleSettingsUI()">
                     <option value="overdrive">🚀 Overdrive</option>
                     <option value="flashcards">🎴 Flashcards</option>
-                </select>
+                    <option value="worst25">📉 Persoonlijk Traject</option> </select>
 
                 <select id="unit-select" class="setting-item" onchange="handleSettingsChange()">
                     <option value="all">Alle Units</option>
                 </select>
 
-                <label class="setting-item" title="Alleen sterren">
+                <label class="setting-item" id="star-only-label" title="Alleen sterren">
                     <input type="checkbox" id="star-only-check" onchange="handleSettingsChange()"> ★ Only
                 </label>
 
@@ -123,9 +139,7 @@
                 <div style="height:10px;"></div>
 
                 <button class="btn-danger-action" onclick="resetSpecificUnit()">Reset Unit...</button>
-                
                 <button id="btn-reset-star" class="btn-danger-action" onclick="resetStarredToNew()">Reset ★ (0)</button>
-                
                 <button class="btn-danger-action" onclick="unstarAll()">Verwijder ★</button>
 
                 <div style="height:10px;"></div>
@@ -152,8 +166,7 @@
                 <h2 style="margin:0; color:var(--gold);">🏆 Woord Klassement</h2>
                 <button class="close-btn" onclick="closeRanking()" style="background:none;border:none;color:white;font-size:1.5rem;cursor:pointer;">&times;</button>
             </div>
-            <div class="word-list" id="ranking-body">
-                </div>
+            <div class="word-list" id="ranking-body"></div>
         </div>
     </div>
 
