@@ -359,7 +359,7 @@ const vocabDatabase = [
     // 170
     {id: 170, w: "crypto wallet", d: "Software program where crypto are stored", u: 12},
     // 171
-    {id: 171, w: "transaction flows", d: "Describes the way in which you can use these in message flows to accomplish certain tasks", u: 12},
+    {id: 171, w: "transaction flows", d: "The observable path and movement of funds between accounts or wallets", u: 12},
     // 172
     {id: 172, w: "lever", d: "Something you use to try to persuade someone to do what you want", u: 12},
     // 173

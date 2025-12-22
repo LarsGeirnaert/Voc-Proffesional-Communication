@@ -5,8 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VOCAB MASTER: CYBER</title>
     <link rel="stylesheet" href="style.css">
-    <script src="vocab_data.js"></script>
-</head>
+    <script src="vocab_base.js"></script>      <script src="vocab_sentences.js"></script> </head></head>
 <body>
     <canvas id="confetti-canvas"></canvas>
 
@@ -59,7 +58,7 @@
 
             <div style="margin-top:15px; width:100%;">
                 <button class="btn" style="background:var(--card-bg); border:1px solid var(--accent); color:var(--accent); font-size:0.9rem;" onclick="showRanking()">
-                    🏆 Klassement
+                    📊 Meer Statistieken
                 </button>
             </div>
         </div>
@@ -121,7 +120,8 @@
                 <select id="mode-select" class="setting-item" onchange="toggleSettingsUI()">
                     <option value="overdrive">🚀 Overdrive</option>
                     <option value="flashcards">🎴 Flashcards</option>
-                    <option value="connect">🧩 Connect 4</option> <option value="worst25">📉 Persoonlijk Traject</option>
+                    <option value="connect">🧩 Connect 4 (Definities)</option>
+                    <option value="fillblanks">🔤 Connect 4 (Zinnen)</option> <option value="worst25">📉 Persoonlijk Traject</option>
                 </select>
 
                 <select id="unit-select" class="setting-item" onchange="handleSettingsChange()">
@@ -172,7 +172,7 @@
     <div class="modal" id="ranking-modal">
         <div class="modal-content" style="max-width: 700px;">
             <div class="modal-header" style="display:flex;justify-content:space-between;border-bottom:1px solid #333;padding-bottom:10px;margin-bottom:10px;">
-                <h2 style="margin:0; color:var(--gold);">🏆 Woord Klassement</h2>
+                <h2 style="margin:0; color:var(--gold);">📊 Gedetailleerde Statistieken</h2>
                 <button class="close-btn" onclick="closeRanking()" style="background:none;border:none;color:white;font-size:1.5rem;cursor:pointer;">&times;</button>
             </div>
             <div class="word-list" id="ranking-body"></div>

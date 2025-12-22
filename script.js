@@ -23,6 +23,7 @@ let sessionWrongItems = [];
 let connectSelection = null; 
 let connectMatchesFound = 0;
 let connectActiveItems = []; 
+let connectLastRoundIds = []; // NIEUW: Houdt bij wat we net gehad hebben
 
 const START_TIME = 25.0;
 const VISUAL_MAX_TIME = 60.0;
@@ -34,14 +35,21 @@ let gameInterval; let isPlaying = false;
 
 // AUTOMATISCHE START
 window.onload = function() {
-    if (typeof vocabDatabase !== 'undefined') {
-        activeDB = vocabDatabase;
+    // Check of beide bestanden geladen zijn en merge ze
+    if (typeof vocabDatabase !== 'undefined' && typeof vocabSentences !== 'undefined') {
+        activeDB = vocabDatabase.map(item => {
+            return {
+                ...item,
+                s: vocabSentences[item.id] || null 
+            };
+        });
+
         fixRenamedWords(); 
         populateUnitDropdown();
         refreshStats();
         toggleSettingsUI();
     } else {
-        document.getElementById('definition-area').innerText = "ERROR: vocab_data.js ontbreekt!";
+        document.getElementById('definition-area').innerText = "ERROR: vocab_base.js of vocab_sentences.js ontbreekt!";
         document.getElementById('definition-area').style.color = "var(--danger)";
     }
 };
@@ -126,6 +134,7 @@ function toggleSettingsUI() {
     const unitSelect = document.getElementById('unit-select');
     const starLabel = document.getElementById('star-only-label');
 
+    // Reset visibility
     unitSelect.style.display = 'block';
     if(starLabel) starLabel.style.display = 'flex';
     timerLabel.style.display = 'flex';
@@ -140,10 +149,10 @@ function toggleSettingsUI() {
         if(starLabel) starLabel.style.display = 'none';
         inputArea.style.display = 'block'; 
         startBtn.innerText = "START PERSOONLIJK TRAJECT";
-    } else if (mode === 'connect') {
+    } else if (mode === 'connect' || mode === 'fillblanks') {
         timerLabel.style.display = 'none'; 
         inputArea.style.display = 'none'; 
-        startBtn.innerText = "START CONNECT";
+        startBtn.innerText = mode === 'connect' ? "START CONNECT" : "START ZINNEN MATCH";
     } else {
         inputArea.style.display = 'block'; 
         startBtn.innerText = "START OVERDRIVE";
@@ -153,7 +162,7 @@ function toggleSettingsUI() {
 
 document.addEventListener('keydown', (e) => {
     if (!isPlaying || isProcessing) return;
-    if (currentMode === 'connect') return;
+    if (currentMode === 'connect' || currentMode === 'fillblanks') return;
     
     if (currentMode !== 'flashcards') return;
     if (!isRevealed) { e.preventDefault(); revealFlashcard(); return; }
@@ -224,6 +233,7 @@ function updateSessionUI() {
 function startGame() {
     currentMode = document.getElementById('mode-select').value;
     
+    // UI RESET
     document.getElementById('definition-area').style.display = 'flex';
     document.getElementById('connect-area').style.display = 'none';
     document.getElementById('input-area').style.display = 'none';
@@ -235,7 +245,6 @@ function startGame() {
     document.getElementById('global-stats').style.display = 'flex';
     document.getElementById('session-stats').style.display = 'none';
 
-    // 1. PERSOONLIJK TRAJECT (WORST 25)
     if (currentMode === 'worst25') {
         buildWorst25Queue();
         if (activeQueue.length === 0) { alert("Geen woorden beschikbaar."); return; }
@@ -247,25 +256,32 @@ function startGame() {
         
         isMaintenanceMode = false;
         timerEnabled = false;
+        
+        const input = document.getElementById('answer-input'); 
+        input.style.display = 'block';
+        input.disabled = false; 
+        input.value = ""; 
+        input.focus();
+        
         nextWord();
 
-    // 2. CONNECT 4
-    } else if (currentMode === 'connect') {
-        buildStandardQueue(); 
+    } else if (currentMode === 'connect' || currentMode === 'fillblanks') {
+        // RESET LAST ROUND TRACKER BIJ START
+        connectLastRoundIds = [];
         
-        // Check of we uberhaupt woorden hebben (om infinite loop te voorkomen)
-        if (activeQueue.length === 0) {
-             // Probeer "Maintenance Mode" queue (alles uit de unit)
-             const selectedUnit = document.getElementById('unit-select').value;
-             const starOnly = document.getElementById('star-only-check').checked;
-             activeQueue = activeDB.filter(item => {
-                const unitMatch = (selectedUnit === 'all' || item.u.toString() === selectedUnit);
-                const starMatch = !starOnly || starredMap[item.w];
-                return unitMatch && starMatch;
-            });
-        }
+        // CHECK OF ER WOORDEN ZIJN IN DE SELECTIE
+        const selectedUnit = document.getElementById('unit-select').value;
+        const starOnly = document.getElementById('star-only-check').checked;
+        const potentialPool = activeDB.filter(item => {
+            const unitMatch = (selectedUnit === 'all' || item.u.toString() === selectedUnit);
+            const starMatch = !starOnly || starredMap[item.w];
+            return unitMatch && starMatch;
+        });
 
-        if (activeQueue.length === 0) { alert("Geen woorden gevonden."); return; }
+        if (potentialPool.length < 4) { 
+            alert("Je hebt minimaal 4 woorden nodig in je selectie voor deze modus."); 
+            return; 
+        }
 
         document.getElementById('definition-area').style.display = 'none'; 
         document.getElementById('connect-area').style.display = 'block'; 
@@ -278,8 +294,8 @@ function startGame() {
         nextConnectRound(); 
         return; 
 
-    // 3. STANDAARD (Overdrive / Flashcards)
     } else {
+        // OVERDRIVE, FLASHCARDS
         buildStandardQueue();
         const selectedUnit = document.getElementById('unit-select').value;
         const starOnly = document.getElementById('star-only-check').checked;
@@ -287,7 +303,7 @@ function startGame() {
             const unitMatch = (selectedUnit === 'all' || item.u.toString() === selectedUnit);
             const starMatch = !starOnly || starredMap[item.w];
             return unitMatch && starMatch;
-        }).length;
+        });
 
         if(activeQueue.length === 0) {
             if (totalInSelection === 0) { alert("Geen woorden gevonden in deze selectie."); return; }
@@ -333,57 +349,48 @@ function startGame() {
     document.getElementById('start-btn').style.display = 'none';
     document.getElementById('settings-div').style.display = 'none'; 
     
-    if (currentMode !== 'flashcards' && currentMode !== 'connect' && currentMode !== 'worst25') {
+    if (currentMode !== 'flashcards' && currentMode !== 'connect' && currentMode !== 'fillblanks' && currentMode !== 'worst25') {
         gameInterval = setInterval(gameLoop, 100);
     }
 }
 
-// --- CONNECT MODE LOGIC (INFINITE REFILL) ---
+// --- CONNECT & FILLBLANKS LOGIC (NIEUWE LOGICA) ---
 function nextConnectRound() {
-    // 1. REFILL LOGIC: Als de queue bijna leeg is, vul hem bij (Oneindig spelen)
-    if (activeQueue.length < 4) {
-        const selectedUnit = document.getElementById('unit-select').value;
-        const starOnly = document.getElementById('star-only-check').checked;
-        
-        let refillItems = activeDB.filter(item => {
-            const unitMatch = (selectedUnit === 'all' || item.u.toString() === selectedUnit);
-            const starMatch = !starOnly || starredMap[item.w];
-            return unitMatch && starMatch;
-        });
-
-        // Voeg alleen toe wat nog niet in de queue zit om dubbels in queue te vermijden (simpel)
-        // Of gewoon husselen en toevoegen. Voor Connect 4 maakt herhaling na verloop van tijd niet uit.
-        activeQueue = activeQueue.concat(refillItems);
-        
-        // Als we na refill NOG STEEDS 0 hebben (bv. 0 sterren), dan stoppen we.
-        if (activeQueue.length === 0) {
-            endSessionVictory(); 
-            return;
-        }
-    }
-
-    // 2. Pak 4 woorden
-    // We husselen de queue eerst een beetje zodat we niet altijd dezelfde volgorde hebben bij refill
-    if (activeQueue.length > 10) { 
-        // Lichte shuffle van het begin van de queue voor variatie
-        // (Optioneel, maar maakt het leuker als je oneindig speelt)
-    }
-
-    let roundSize = Math.min(4, activeQueue.length);
-    connectActiveItems = activeQueue.slice(0, roundSize);
+    // 1. BEPAAL DE 'FULL POOL' (Alle woorden die aan de filters voldoen)
+    const selectedUnit = document.getElementById('unit-select').value;
+    const starOnly = document.getElementById('star-only-check').checked;
     
-    // Verwijder uit queue
-    activeQueue = activeQueue.slice(roundSize);
+    let fullPool = activeDB.filter(item => {
+        const unitMatch = (selectedUnit === 'all' || item.u.toString() === selectedUnit);
+        const starMatch = !starOnly || starredMap[item.w];
+        return unitMatch && starMatch;
+    });
 
-    // Als we er minder dan 4 hebben (echt einde database), vul aan met randoms uit DB (visueel matchbaar maken)
-    if (roundSize < 4) {
-        let pool = activeDB.filter(x => !connectActiveItems.includes(x));
-        while (connectActiveItems.length < 4 && pool.length > 0) {
-            let randomItem = pool[Math.floor(Math.random() * pool.length)];
-            connectActiveItems.push(randomItem);
-            pool = pool.filter(x => x !== randomItem);
-        }
+    if (fullPool.length < 4) {
+        alert("Te weinig woorden voor een nieuwe ronde.");
+        stopGame();
+        return;
     }
+
+    // 2. KIES KANDIDATEN
+    let candidates = [];
+
+    if (fullPool.length <= 7) {
+        // Groep is te klein om "vorige" uit te sluiten, dus pak gewoon alles
+        candidates = fullPool;
+    } else {
+        // Groep is groot genoeg: Filter de woorden van de VORIGE ronde eruit
+        candidates = fullPool.filter(item => !connectLastRoundIds.includes(item.w));
+    }
+
+    // 3. KIES 4 RANDOM ITEMS UIT KANDIDATEN
+    // Shuffle
+    candidates.sort(() => Math.random() - 0.5);
+    // Pak de eerste 4
+    connectActiveItems = candidates.slice(0, 4);
+
+    // 4. SLA DEZE OP ALS 'VORIGE RONDE' VOOR DE VOLGENDE KEER
+    connectLastRoundIds = connectActiveItems.map(i => i.w);
 
     connectMatchesFound = 0;
     renderConnectBoard();
@@ -411,7 +418,32 @@ function renderConnectBoard() {
     defs.forEach(item => {
         let btn = document.createElement('div');
         btn.className = 'connect-btn';
-        btn.innerText = item.d; 
+        
+        if (currentMode === 'fillblanks') {
+            let sentences = item.s;
+            let s = "";
+
+            if (Array.isArray(sentences)) {
+                // KIES RANDOM ZIN
+                s = sentences[Math.floor(Math.random() * sentences.length)];
+            } else {
+                s = sentences || item.d;
+            }
+
+            if(s) {
+                // VERVANG HET WOORD (Slimme check met 'to')
+                let searchWord = item.w;
+                if (searchWord.toLowerCase().startsWith("to ")) {
+                    searchWord = searchWord.substring(3); 
+                }
+                const regex = new RegExp(searchWord, 'gi');
+                s = s.replace(regex, '_______');
+            }
+            btn.innerText = s;
+        } else {
+            btn.innerText = item.d; 
+        }
+
         btn.dataset.id = item.w; 
         btn.dataset.type = 'def';
         btn.onclick = () => handleConnectClick(btn, item.w, 'def');
@@ -531,7 +563,7 @@ function nextWord() {
         });
         isPlaying = false; 
         setTimeout(() => {
-            if(document.getElementById('input-area').style.display !== 'none') {
+            if(document.getElementById('settings-div').style.display === 'none') {
                 isPlaying = true;
                 nextWord(); 
             }
@@ -621,6 +653,7 @@ function renderGameUI() {
                 <div class="fc-face fc-back">${currentItem.w}</div>
             </div>`;
     } else {
+        // OVERDRIVE / WORST25 (Toon definitie)
         contentHtml = `
             ${starHtml}
             <div style="margin-top:10px;">${currentItem.d}</div>
@@ -637,7 +670,7 @@ function renderGameUI() {
 
 // --- INPUT HANDLING ---
 document.getElementById('answer-input').addEventListener('input', (e) => {
-    if (!isPlaying || currentMode === 'flashcards' || currentMode === 'connect') return;
+    if (!isPlaying || currentMode === 'flashcards' || currentMode === 'connect' || currentMode === 'fillblanks') return;
     const val = e.target.value.trim().toLowerCase();
     const correct = currentItem.w.toLowerCase();
 
@@ -729,16 +762,15 @@ function endSessionVictory() {
     let wrongListHtml = sessionWrongItems.map(w => `<div style="color:var(--danger); padding:2px 0;">✕ ${w.w}</div>`).join('');
     let correctListHtml = sessionCorrectItems.map(w => `<div style="color:var(--success); padding:2px 0;">✓ ${w.w}</div>`).join('');
 
-    // Bepaal titel en knop tekst
     let title = "Resultaten";
     let btnText = "Opnieuw Spelen";
     
     if (currentMode === 'worst25') {
         title = "Sessie Voltooid!";
         btnText = "Nog een keer (Persoonlijk Traject)";
-    } else if (currentMode === 'connect') {
-        title = "Connect 4 Voltooid!";
-        btnText = "Nog een keer (Connect 4)";
+    } else if (currentMode === 'connect' || currentMode === 'fillblanks') {
+        title = currentMode === 'connect' ? "Connect 4 Voltooid!" : "Zinnen Match Voltooid!";
+        btnText = currentMode === 'connect' ? "Nog een keer (Connect 4)" : "Nog een keer (Zinnen Match)";
     }
 
     area.innerHTML = `
@@ -758,7 +790,7 @@ function endSessionVictory() {
     `;
     
     document.getElementById('answer-input').style.display = 'none';
-    document.getElementById('connect-area').style.display = 'none'; // Verberg grid bij stop/einde
+    document.getElementById('connect-area').style.display = 'none'; 
     
     const startBtn = document.getElementById('start-btn');
     startBtn.innerText = btnText;
@@ -888,11 +920,9 @@ function stopGame() {
     document.getElementById('timer').style.opacity = '0';
     document.getElementById('btn-show-answer').style.display = 'none';
     
-    // Bij Connect: Stop betekent ook einde sessie scherm (maar dan met tekst FIX)
-    if (currentMode === 'connect') {
-        endSessionVictory(); // Toont het eindscherm met de juiste "Nog een keer" knop
+    if (currentMode === 'connect' || currentMode === 'fillblanks') {
+        endSessionVictory(); 
     } else {
-        // Standaard stop gedrag
         const area = document.getElementById('definition-area');
         area.innerHTML = `<div style="margin-bottom: 15px;"><span style="font-size: 3rem;">🛑</span></div><div style="color: var(--danger); font-weight: bold; font-size: 1.5rem; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">Spel Gestopt</div><div style="color: var(--text-muted); font-size: 1.1rem;">Je eindscore is: <span style="color: var(--accent); font-weight: bold; font-size: 1.3rem;">${score}</span></div>`;
         const startBtn = document.getElementById('start-btn'); 
@@ -974,7 +1004,16 @@ function showRanking() {
 
     if (!activeDB) return;
 
-    const selectedUnit = document.getElementById('unit-select').value;
+    let selectedUnit = document.getElementById('unit-select').value;
+    const mode = document.getElementById('mode-select').value; // <--- HUIDIGE MODE OPHALEN
+
+    // --- DE FIX ---
+    // Als we in "Persoonlijk Traject" zitten, negeer de unit-keuze en toon ALLES.
+    if (mode === 'worst25') {
+        selectedUnit = 'all';
+    }
+    // ----------------
+
     const scopeWords = activeDB.filter(item => selectedUnit === 'all' || item.u.toString() === selectedUnit);
 
     let list = scopeWords.map(item => {
@@ -994,10 +1033,13 @@ function showRanking() {
     list.forEach(i => { totalCorrect += i.c; totalAttempts += i.t; });
 
     if (list.length > 0) {
+        // Pas de titel aan als het Persoonlijk Traject is, zodat het duidelijk is
+        let titleText = (mode === 'worst25' || selectedUnit === 'all') ? "Totaal Score (Alles)" : "Totaal Score (Deze Unit)";
+
         const summary = document.createElement('div');
         summary.style.cssText = "text-align:center; padding:15px; background:rgba(255,255,255,0.05); border-radius:8px; margin-bottom:15px; border:1px solid var(--glass-border);";
         summary.innerHTML = `
-            <div style="font-size:0.8rem; text-transform:uppercase; color:#94a3b8; letter-spacing:1px;">Totaal Score</div>
+            <div style="font-size:0.8rem; text-transform:uppercase; color:#94a3b8; letter-spacing:1px;">${titleText}</div>
             <div style="font-size:2rem; font-weight:bold; color:var(--accent);">
                 ${totalCorrect} <span style="color:#64748b; font-size:1.5rem;">/</span> ${totalAttempts}
             </div>
@@ -1036,7 +1078,6 @@ function showRanking() {
     }
     m.style.display = 'flex';
 }
-
 function getScoreColor(pct) {
     if(pct >= 80) return "var(--success)";
     if(pct >= 50) return "var(--gold)";
