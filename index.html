@@ -87,6 +87,13 @@
                 Selecteer een mode en klik op START.
             </div>
 
+            <div id="connect-area" style="display:none; width:100%; margin-top:20px;">
+                <div class="connect-container">
+                    <div id="col-words" class="connect-col"></div>
+                    <div id="col-defs" class="connect-col"></div>
+                </div>
+            </div>
+
             <div class="input-group" id="input-area">
                 <input type="text" id="answer-input" placeholder="Type het woord..." disabled autocomplete="off">
             </div>
@@ -103,6 +110,7 @@
                      <button class="btn btn-fc-good" onclick="handleFlashcardResult(true)">2. Ik wist hem</button>
                  </div>
             </div>
+            
             <div id="fc-stop-controls" style="display:none; width:100%; text-align:center; margin-top:10px;">
                  <button class="btn btn-stop" onclick="stopGame()">STOP</button>
             </div>
@@ -113,7 +121,8 @@
                 <select id="mode-select" class="setting-item" onchange="toggleSettingsUI()">
                     <option value="overdrive">🚀 Overdrive</option>
                     <option value="flashcards">🎴 Flashcards</option>
-                    <option value="worst25">📉 Persoonlijk Traject</option> </select>
+                    <option value="connect">🧩 Connect 4</option> <option value="worst25">📉 Persoonlijk Traject</option>
+                </select>
 
                 <select id="unit-select" class="setting-item" onchange="handleSettingsChange()">
                     <option value="all">Alle Units</option>

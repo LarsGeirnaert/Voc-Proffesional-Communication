@@ -250,4 +250,70 @@ option { background: #0f172a; }
 .rank-row:hover { background: rgba(255,255,255,0.05); }
 .rank-1 { color: #ffd700; font-weight: bold; } /* Goud */
 .rank-2 { color: #c0c0c0; font-weight: bold; } /* Zilver */
-.rank-3 { color: #cd7f32; font-weight: bold; } /* Brons */
+.rank-3 { color: #cd7f32; font-weight: bold; } /* Brons */ 
+
+/* --- CONNECT 4 GAME MODE --- */
+.connect-container {
+    display: flex;
+    gap: 15px;
+    width: 100%;
+    height: 400px; /* Vaste hoogte voor rust */
+}
+
+.connect-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.connect-btn {
+    flex: 1;
+    background: var(--card-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    color: var(--text-main);
+    padding: 10px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    user-select: none;
+}
+
+.connect-btn:hover {
+    background: rgba(255,255,255,0.1);
+    transform: translateY(-2px);
+}
+
+.connect-btn.selected {
+    border-color: var(--accent);
+    background: rgba(6, 182, 212, 0.2);
+    box-shadow: 0 0 10px rgba(6, 182, 212, 0.3);
+}
+
+.connect-btn.correct {
+    background: var(--success);
+    border-color: var(--success);
+    color: #0f172a;
+    opacity: 0; /* Verdwijnen */
+    pointer-events: none;
+    transition: opacity 0.5s;
+}
+
+.connect-btn.wrong {
+    background: var(--danger);
+    border-color: var(--danger);
+    animation: shake 0.3s;
+}
+
+@keyframes shake {
+    0% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    50% { transform: translateX(5px); }
+    75% { transform: translateX(-5px); }
+    100% { transform: translateX(0); }
+}

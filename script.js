@@ -11,14 +11,18 @@ let currentListType = null;
 
 let isMaintenanceMode = false; 
 
-// SESSIE VARIABELEN (voor Persoonlijk Traject / Worst 25)
+// SESSIE VARIABELEN
 let sessionTotal = 0;
 let sessionCount = 0;
 let sessionCorrect = 0;
 let sessionWrong = 0;
-// NIEUW: Arrays om bij te houden WELKE woorden goed/fout waren
 let sessionCorrectItems = [];
 let sessionWrongItems = [];
+
+// CONNECT GAME VARIABELEN
+let connectSelection = null; 
+let connectMatchesFound = 0;
+let connectActiveItems = []; 
 
 const START_TIME = 25.0;
 const VISUAL_MAX_TIME = 60.0;
@@ -136,6 +140,10 @@ function toggleSettingsUI() {
         if(starLabel) starLabel.style.display = 'none';
         inputArea.style.display = 'block'; 
         startBtn.innerText = "START PERSOONLIJK TRAJECT";
+    } else if (mode === 'connect') {
+        timerLabel.style.display = 'none'; 
+        inputArea.style.display = 'none'; 
+        startBtn.innerText = "START CONNECT";
     } else {
         inputArea.style.display = 'block'; 
         startBtn.innerText = "START OVERDRIVE";
@@ -144,7 +152,10 @@ function toggleSettingsUI() {
 }
 
 document.addEventListener('keydown', (e) => {
-    if (!isPlaying || currentMode !== 'flashcards' || isProcessing) return;
+    if (!isPlaying || isProcessing) return;
+    if (currentMode === 'connect') return;
+    
+    if (currentMode !== 'flashcards') return;
     if (!isRevealed) { e.preventDefault(); revealFlashcard(); return; }
     if (e.key === '1' || e.key === 'ArrowLeft') handleFlashcardResult(false);
     if (e.key === '2' || e.key === 'ArrowRight') handleFlashcardResult(true);
@@ -194,16 +205,12 @@ function buildWorst25Queue() {
     
     activeQueue = selectedBest.concat(selectedWorst).sort(() => Math.random() - 0.5);
     
-    // SETUP SESSIE
     sessionTotal = activeQueue.length;
     sessionCount = 0;
     sessionCorrect = 0;
     sessionWrong = 0;
-    
-    // RESET LIJSTEN VOOR NIEUWE RONDE
     sessionCorrectItems = [];
     sessionWrongItems = [];
-    
     updateSessionUI();
 }
 
@@ -217,18 +224,61 @@ function updateSessionUI() {
 function startGame() {
     currentMode = document.getElementById('mode-select').value;
     
+    document.getElementById('definition-area').style.display = 'flex';
+    document.getElementById('connect-area').style.display = 'none';
+    document.getElementById('input-area').style.display = 'none';
+    document.getElementById('game-controls').style.display = 'none';
+    document.getElementById('fc-controls').style.display = 'none';
+    document.getElementById('fc-stop-controls').style.display = 'none';
+    document.getElementById('timer-container-div').style.display = 'none';
+    document.getElementById('timer').style.opacity = '0';
+    document.getElementById('global-stats').style.display = 'flex';
+    document.getElementById('session-stats').style.display = 'none';
+
+    // 1. PERSOONLIJK TRAJECT (WORST 25)
     if (currentMode === 'worst25') {
         buildWorst25Queue();
         if (activeQueue.length === 0) { alert("Geen woorden beschikbaar."); return; }
         
         document.getElementById('global-stats').style.display = 'none';
         document.getElementById('session-stats').style.display = 'flex';
-        isMaintenanceMode = false;
+        document.getElementById('input-area').style.display = 'block'; 
+        document.getElementById('game-controls').style.display = 'flex';
         
+        isMaintenanceMode = false;
         timerEnabled = false;
-        document.getElementById('timer-container-div').style.display = 'none';
-        document.getElementById('timer').style.opacity = '0';
+        nextWord();
 
+    // 2. CONNECT 4
+    } else if (currentMode === 'connect') {
+        buildStandardQueue(); 
+        
+        // Check of we uberhaupt woorden hebben (om infinite loop te voorkomen)
+        if (activeQueue.length === 0) {
+             // Probeer "Maintenance Mode" queue (alles uit de unit)
+             const selectedUnit = document.getElementById('unit-select').value;
+             const starOnly = document.getElementById('star-only-check').checked;
+             activeQueue = activeDB.filter(item => {
+                const unitMatch = (selectedUnit === 'all' || item.u.toString() === selectedUnit);
+                const starMatch = !starOnly || starredMap[item.w];
+                return unitMatch && starMatch;
+            });
+        }
+
+        if (activeQueue.length === 0) { alert("Geen woorden gevonden."); return; }
+
+        document.getElementById('definition-area').style.display = 'none'; 
+        document.getElementById('connect-area').style.display = 'block'; 
+        document.getElementById('fc-stop-controls').style.display = 'block';
+        
+        isPlaying = true;
+        document.getElementById('start-btn').style.display = 'none';
+        document.getElementById('settings-div').style.display = 'none';
+        
+        nextConnectRound(); 
+        return; 
+
+    // 3. STANDAARD (Overdrive / Flashcards)
     } else {
         buildStandardQueue();
         const selectedUnit = document.getElementById('unit-select').value;
@@ -252,24 +302,29 @@ function startGame() {
             isMaintenanceMode = false;
         }
         
-        document.getElementById('global-stats').style.display = 'flex';
-        document.getElementById('session-stats').style.display = 'none';
-        
         timerEnabled = document.getElementById('timer-check').checked;
-        const timerDiv = document.getElementById('timer-container-div');
-        const timerTxt = document.getElementById('timer');
         
         if (currentMode === 'flashcards') {
-            timerDiv.style.display = 'none';
-            timerTxt.style.opacity = '0';
+            document.getElementById('fc-controls').style.display = 'flex'; 
+            document.getElementById('fc-stop-controls').style.display = 'block';
         } else {
-            timerDiv.style.display = 'block'; 
-            timerTxt.style.opacity = '1';
+            document.getElementById('input-area').style.display = 'block'; 
+            document.getElementById('game-controls').style.display = 'flex';
+            document.getElementById('timer-container-div').style.display = 'block'; 
+            document.getElementById('timer').style.opacity = '1';
+            
+            const input = document.getElementById('answer-input'); 
+            input.style.display = 'block';
+            input.disabled = false; 
+            input.value = ""; 
+            input.focus();
             if (!timerEnabled) {
-                timerTxt.innerText = "∞"; timerTxt.style.color = "var(--accent)"; 
+                document.getElementById('timer').innerText = "∞"; 
+                document.getElementById('timer').style.color = "var(--accent)"; 
                 document.getElementById('visual-timer').style.width = "100%";
             }
         }
+        nextWord();
     }
     
     score = 0; timer = START_TIME; isPlaying = true; isProcessing = false; isRevealed = false;
@@ -278,27 +333,161 @@ function startGame() {
     document.getElementById('start-btn').style.display = 'none';
     document.getElementById('settings-div').style.display = 'none'; 
     
-    const inputArea = document.getElementById('input-area');
-    const gameControls = document.getElementById('game-controls');
-    const fcControls = document.getElementById('fc-controls');
-    const fcStop = document.getElementById('fc-stop-controls');
-
-    inputArea.style.display = 'none'; gameControls.style.display = 'none'; fcControls.style.display = 'none'; fcStop.style.display = 'none'; 
-
-    if (currentMode === 'flashcards') {
-        fcControls.style.display = 'flex'; fcStop.style.display = 'block';
-    } else {
-        inputArea.style.display = 'block'; gameControls.style.display = 'flex'; 
-        const input = document.getElementById('answer-input'); 
-        input.style.display = 'block';
-        input.disabled = false; 
-        input.value = ""; 
-        input.focus();
+    if (currentMode !== 'flashcards' && currentMode !== 'connect' && currentMode !== 'worst25') {
+        gameInterval = setInterval(gameLoop, 100);
     }
-    nextWord();
-    if (currentMode !== 'flashcards') gameInterval = setInterval(gameLoop, 100);
 }
 
+// --- CONNECT MODE LOGIC (INFINITE REFILL) ---
+function nextConnectRound() {
+    // 1. REFILL LOGIC: Als de queue bijna leeg is, vul hem bij (Oneindig spelen)
+    if (activeQueue.length < 4) {
+        const selectedUnit = document.getElementById('unit-select').value;
+        const starOnly = document.getElementById('star-only-check').checked;
+        
+        let refillItems = activeDB.filter(item => {
+            const unitMatch = (selectedUnit === 'all' || item.u.toString() === selectedUnit);
+            const starMatch = !starOnly || starredMap[item.w];
+            return unitMatch && starMatch;
+        });
+
+        // Voeg alleen toe wat nog niet in de queue zit om dubbels in queue te vermijden (simpel)
+        // Of gewoon husselen en toevoegen. Voor Connect 4 maakt herhaling na verloop van tijd niet uit.
+        activeQueue = activeQueue.concat(refillItems);
+        
+        // Als we na refill NOG STEEDS 0 hebben (bv. 0 sterren), dan stoppen we.
+        if (activeQueue.length === 0) {
+            endSessionVictory(); 
+            return;
+        }
+    }
+
+    // 2. Pak 4 woorden
+    // We husselen de queue eerst een beetje zodat we niet altijd dezelfde volgorde hebben bij refill
+    if (activeQueue.length > 10) { 
+        // Lichte shuffle van het begin van de queue voor variatie
+        // (Optioneel, maar maakt het leuker als je oneindig speelt)
+    }
+
+    let roundSize = Math.min(4, activeQueue.length);
+    connectActiveItems = activeQueue.slice(0, roundSize);
+    
+    // Verwijder uit queue
+    activeQueue = activeQueue.slice(roundSize);
+
+    // Als we er minder dan 4 hebben (echt einde database), vul aan met randoms uit DB (visueel matchbaar maken)
+    if (roundSize < 4) {
+        let pool = activeDB.filter(x => !connectActiveItems.includes(x));
+        while (connectActiveItems.length < 4 && pool.length > 0) {
+            let randomItem = pool[Math.floor(Math.random() * pool.length)];
+            connectActiveItems.push(randomItem);
+            pool = pool.filter(x => x !== randomItem);
+        }
+    }
+
+    connectMatchesFound = 0;
+    renderConnectBoard();
+}
+
+function renderConnectBoard() {
+    const colWords = document.getElementById('col-words');
+    const colDefs = document.getElementById('col-defs');
+    colWords.innerHTML = "";
+    colDefs.innerHTML = "";
+
+    let words = [...connectActiveItems].sort(() => Math.random() - 0.5);
+    let defs = [...connectActiveItems].sort(() => Math.random() - 0.5);
+
+    words.forEach(item => {
+        let btn = document.createElement('div');
+        btn.className = 'connect-btn';
+        btn.innerText = item.w;
+        btn.dataset.id = item.w; 
+        btn.dataset.type = 'word';
+        btn.onclick = () => handleConnectClick(btn, item.w, 'word');
+        colWords.appendChild(btn);
+    });
+
+    defs.forEach(item => {
+        let btn = document.createElement('div');
+        btn.className = 'connect-btn';
+        btn.innerText = item.d; 
+        btn.dataset.id = item.w; 
+        btn.dataset.type = 'def';
+        btn.onclick = () => handleConnectClick(btn, item.w, 'def');
+        colDefs.appendChild(btn);
+    });
+}
+
+function handleConnectClick(el, id, type) {
+    if (el.classList.contains('correct')) return; 
+
+    if (connectSelection && connectSelection.el === el) {
+        el.classList.remove('selected');
+        connectSelection = null;
+        return;
+    }
+
+    if (!connectSelection) {
+        connectSelection = { el: el, id: id, type: type };
+        el.classList.add('selected');
+        return;
+    }
+
+    if (connectSelection.type === type) {
+        connectSelection.el.classList.remove('selected');
+        connectSelection = { el: el, id: id, type: type };
+        el.classList.add('selected');
+        return;
+    }
+
+    let match = (connectSelection.id === id);
+
+    if (match) {
+        el.classList.add('correct');
+        connectSelection.el.classList.add('correct');
+        el.classList.remove('selected');
+        connectSelection.el.classList.remove('selected');
+        
+        updateStats(id, true);
+        let lvl = parseInt(progressMap[id] || 0);
+        if(lvl < 2) progressMap[id] = lvl + 1;
+        saveProgress();
+
+        score++;
+        document.getElementById('score').innerText = score;
+
+        connectSelection = null;
+        connectMatchesFound++;
+
+        if (connectMatchesFound === 4) {
+            setTimeout(nextConnectRound, 500);
+        }
+
+    } else {
+        el.classList.add('wrong');
+        connectSelection.el.classList.add('wrong');
+        
+        updateStats(connectSelection.id, false); 
+        progressMap[connectSelection.id] = -1;
+        starredMap[connectSelection.id] = true;
+        saveProgress();
+
+        let t1 = el;
+        let t2 = connectSelection.el;
+        
+        setTimeout(() => {
+            t1.classList.remove('wrong');
+            t2.classList.remove('wrong');
+            t1.classList.remove('selected');
+            t2.classList.remove('selected');
+        }, 500);
+        
+        connectSelection = null;
+    }
+}
+
+// --- STANDAARD GAME LOOP LOGICA ---
 function gameLoop() {
     if (!isPlaying) return;
     if (timerEnabled) {
@@ -314,7 +503,7 @@ function gameLoop() {
     }
 }
 
-// --- NEXTWORD ---
+// --- STANDAARD NEXTWORD ---
 function nextWord() {
     if (currentMode === 'worst25' && activeQueue.length === 0) {
         endSessionVictory();
@@ -350,7 +539,6 @@ function nextWord() {
         return; 
     }
     
-    // KIES NIEUW WOORD
     if (currentMode === 'worst25') {
         currentItem = activeQueue[0];
     } else {
@@ -449,7 +637,7 @@ function renderGameUI() {
 
 // --- INPUT HANDLING ---
 document.getElementById('answer-input').addEventListener('input', (e) => {
-    if (!isPlaying || currentMode === 'flashcards') return;
+    if (!isPlaying || currentMode === 'flashcards' || currentMode === 'connect') return;
     const val = e.target.value.trim().toLowerCase();
     const correct = currentItem.w.toLowerCase();
 
@@ -490,7 +678,6 @@ function passWord(skipVisuals = false, isConfusion = false) {
     if (currentMode === 'worst25') {
         sessionWrong++;
         sessionCount++;
-        // TRACKING VOOR LIJST
         sessionWrongItems.push(currentItem);
         updateSessionUI();
         activeQueue = activeQueue.filter(i => i.w !== currentItem.w);
@@ -517,7 +704,6 @@ function handleCorrect(skipVisuals = false) {
     if (currentMode === 'worst25') {
         sessionCorrect++;
         sessionCount++;
-        // TRACKING VOOR LIJST
         sessionCorrectItems.push(currentItem);
         updateSessionUI();
         activeQueue = activeQueue.filter(i => i.w !== currentItem.w);
@@ -534,27 +720,36 @@ function handleCorrect(skipVisuals = false) {
     nextWord();
 }
 
-// --- EIND SESSIE MET LIJSTEN ---
 function endSessionVictory() {
     isPlaying = false;
     clearInterval(gameInterval);
     fireConfetti();
     const area = document.getElementById('definition-area');
     
-    // Genereer lijst items
     let wrongListHtml = sessionWrongItems.map(w => `<div style="color:var(--danger); padding:2px 0;">✕ ${w.w}</div>`).join('');
     let correctListHtml = sessionCorrectItems.map(w => `<div style="color:var(--success); padding:2px 0;">✓ ${w.w}</div>`).join('');
 
+    // Bepaal titel en knop tekst
+    let title = "Resultaten";
+    let btnText = "Opnieuw Spelen";
+    
+    if (currentMode === 'worst25') {
+        title = "Sessie Voltooid!";
+        btnText = "Nog een keer (Persoonlijk Traject)";
+    } else if (currentMode === 'connect') {
+        title = "Connect 4 Voltooid!";
+        btnText = "Nog een keer (Connect 4)";
+    }
+
     area.innerHTML = `
         <div style="margin-bottom: 10px;"><span style="font-size: 2.5rem;">🏁</span></div>
-        <div style="color:white; font-size:1.4rem; font-weight:bold; margin-bottom:15px;">Resultaten</div>
+        <div style="color:white; font-size:1.4rem; font-weight:bold; margin-bottom:15px;">${title}</div>
         
         <div style="display:flex; gap:10px; width:100%; height:200px; text-align:left;">
             <div style="flex:1; background:rgba(255,0,0,0.1); border-radius:8px; padding:10px; overflow-y:auto; border:1px solid var(--danger);">
                 <div style="font-weight:bold; color:var(--danger); margin-bottom:5px; text-transform:uppercase; font-size:0.8rem;">Fout (${sessionWrongItems.length})</div>
                 <div style="font-size:0.9rem;">${wrongListHtml || '<span style="color:#666; font-style:italic;">Geen fouten!</span>'}</div>
             </div>
-
             <div style="flex:1; background:rgba(0,255,0,0.1); border-radius:8px; padding:10px; overflow-y:auto; border:1px solid var(--success);">
                 <div style="font-weight:bold; color:var(--success); margin-bottom:5px; text-transform:uppercase; font-size:0.8rem;">Goed (${sessionCorrectItems.length})</div>
                 <div style="font-size:0.9rem;">${correctListHtml || '<span style="color:#666; font-style:italic;">Niks goed...</span>'}</div>
@@ -563,9 +758,10 @@ function endSessionVictory() {
     `;
     
     document.getElementById('answer-input').style.display = 'none';
+    document.getElementById('connect-area').style.display = 'none'; // Verberg grid bij stop/einde
     
     const startBtn = document.getElementById('start-btn');
-    startBtn.innerText = "Nog een keer (Persoonlijk Traject)";
+    startBtn.innerText = btnText;
     startBtn.style.display = 'block';
     
     document.getElementById('settings-div').style.display = 'flex';
@@ -691,10 +887,19 @@ function stopGame() {
     document.getElementById('timer-container-div').style.display = 'none';
     document.getElementById('timer').style.opacity = '0';
     document.getElementById('btn-show-answer').style.display = 'none';
-    const area = document.getElementById('definition-area');
-    area.innerHTML = `<div style="margin-bottom: 15px;"><span style="font-size: 3rem;">🛑</span></div><div style="color: var(--danger); font-weight: bold; font-size: 1.5rem; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">Spel Gestopt</div><div style="color: var(--text-muted); font-size: 1.1rem;">Je eindscore is: <span style="color: var(--accent); font-weight: bold; font-size: 1.3rem;">${score}</span></div>`;
-    const startBtn = document.getElementById('start-btn'); startBtn.innerText = "Opnieuw Spelen"; startBtn.style.display = 'block';
-    document.getElementById('settings-div').style.display = 'flex';
+    
+    // Bij Connect: Stop betekent ook einde sessie scherm (maar dan met tekst FIX)
+    if (currentMode === 'connect') {
+        endSessionVictory(); // Toont het eindscherm met de juiste "Nog een keer" knop
+    } else {
+        // Standaard stop gedrag
+        const area = document.getElementById('definition-area');
+        area.innerHTML = `<div style="margin-bottom: 15px;"><span style="font-size: 3rem;">🛑</span></div><div style="color: var(--danger); font-weight: bold; font-size: 1.5rem; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">Spel Gestopt</div><div style="color: var(--text-muted); font-size: 1.1rem;">Je eindscore is: <span style="color: var(--accent); font-weight: bold; font-size: 1.3rem;">${score}</span></div>`;
+        const startBtn = document.getElementById('start-btn'); 
+        startBtn.innerText = "Opnieuw Spelen"; 
+        startBtn.style.display = 'block';
+        document.getElementById('settings-div').style.display = 'flex';
+    }
 }
 
 function gameOver() { isPlaying=false; clearInterval(gameInterval); alert(`Game Over! Score: ${score}`); location.reload(); }
