@@ -125,7 +125,7 @@ const vocabDatabase = [
     // 57
     {id: 57, w: "to freeze somebody out", d: "To stop a person or organization from being included in a particular activity or arrangement", u: 9},
     // 58
-    {id: 58, w: "a third-party purchase", d: "A person other than the main participants buys something", u: 9},
+    {id: 58, w: "third-party purchase", d: "A person other than the main participants buys something", u: 9},
     // 59
     {id: 59, w: "allegedly", d: "Used when something is said to be true that has not been proved", u: 9},
     // 60

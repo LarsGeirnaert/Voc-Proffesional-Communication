@@ -6,9 +6,11 @@ let wordStats = JSON.parse(localStorage.getItem('vocab_stats')) || {};
 
 let activeQueue = [];
 let currentItem = null;
-let isReviewWord = false;
 let score = 0;
 let currentListType = null;
+
+// Houdt bij of we in de "Alles Gekend" fase zitten (Fase 3)
+let isMaintenanceMode = false; 
 
 const START_TIME = 25.0;
 const VISUAL_MAX_TIME = 60.0;
@@ -22,6 +24,7 @@ let gameInterval; let isPlaying = false;
 window.onload = function() {
     if (typeof vocabDatabase !== 'undefined') {
         activeDB = vocabDatabase;
+        fixRenamedWords(); 
         populateUnitDropdown();
         refreshStats();
         toggleSettingsUI();
@@ -31,19 +34,46 @@ window.onload = function() {
     }
 };
 
-// --- STATISTIEKEN UPDATEN ---
+// --- DATA MIGREREN ---
+function fixRenamedWords() {
+    const fixes = [{ oldW: "a third-party purchase", newW: "third-party purchase" }];
+    let changed = false;
+    fixes.forEach(fix => {
+        if (wordStats[fix.oldW]) {
+            if (!wordStats[fix.newW]) wordStats[fix.newW] = { c: 0, t: 0 };
+            wordStats[fix.newW].c += wordStats[fix.oldW].c;
+            wordStats[fix.newW].t += wordStats[fix.oldW].t;
+            delete wordStats[fix.oldW];
+            localStorage.setItem('vocab_stats', JSON.stringify(wordStats));
+            changed = true;
+        }
+        if (progressMap[fix.oldW] !== undefined) {
+            if (progressMap[fix.newW] === undefined || progressMap[fix.oldW] > progressMap[fix.newW]) {
+                progressMap[fix.newW] = progressMap[fix.oldW];
+            }
+            delete progressMap[fix.oldW];
+            localStorage.setItem('vocab_progress_v2', JSON.stringify(progressMap));
+            changed = true;
+        }
+        if (starredMap[fix.oldW]) {
+            starredMap[fix.newW] = true;
+            delete starredMap[fix.oldW];
+            localStorage.setItem('vocab_starred', JSON.stringify(starredMap));
+            changed = true;
+        }
+    });
+    if (changed) console.log("Woordnamen bijgewerkt.");
+}
+
+// --- STATISTIEKEN ---
 function updateStats(word, isCorrect) {
-    if (!wordStats[word]) {
-        wordStats[word] = { c: 0, t: 0 };
-    }
+    if (!wordStats[word]) wordStats[word] = { c: 0, t: 0 };
     wordStats[word].t++; 
-    if (isCorrect) {
-        wordStats[word].c++; 
-    }
+    if (isCorrect) wordStats[word].c++; 
     localStorage.setItem('vocab_stats', JSON.stringify(wordStats));
 }
 
-// --- RESET FUNCTIES ---
+// --- RESET ---
 function resetStarredToNew() {
     const starredKeys = Object.keys(starredMap);
     if (starredKeys.length === 0) { alert("Geen sterren."); return; }
@@ -61,44 +91,28 @@ function unstarAll() {
     }
 }
 function resetProgress() {
-    if (!confirm("⚠️ WEET JE HET ZEKER?\n\nDit zal al je voortgang (groen/rood gemarkeerde woorden) wissen.")) {
-        return;
-    }
+    if (!confirm("⚠️ WEET JE HET ZEKER?\n\nDit zal al je voortgang (groen/rood gemarkeerde woorden) wissen.")) return;
     let wisKlassement = confirm("Wil je ook het KLASSEMENT (statistieken) wissen?\n\n✅ Klik OK om ALLES te wissen.\n❌ Klik ANNULEREN om je ranglijst te BEWAREN.");
-
     localStorage.removeItem('vocab_progress_v2');
     localStorage.removeItem('vocab_starred');
-
-    if (wisKlassement) {
-        localStorage.removeItem('vocab_stats');
-    }
+    if (wisKlassement) localStorage.removeItem('vocab_stats');
     location.reload();
 }
 
-// --- UI/SETTINGS ---
-function handleSettingsChange() { 
-    saveUnitSelection(); 
-    refreshStats();
-}
-
+// --- UI ---
+function handleSettingsChange() { saveUnitSelection(); refreshStats(); }
 function toggleSettingsUI() {
     const mode = document.getElementById('mode-select').value;
     const timerLabel = document.getElementById('timer-toggle-label');
     const inputArea = document.getElementById('input-area');
     const startBtn = document.getElementById('start-btn');
-
     if (mode === 'flashcards') {
-        timerLabel.style.display = 'none';
-        inputArea.style.display = 'none';
-        startBtn.innerText = "START FLASHCARDS";
+        timerLabel.style.display = 'none'; inputArea.style.display = 'none'; startBtn.innerText = "START FLASHCARDS";
     } else {
-        timerLabel.style.display = 'flex';
-        inputArea.style.display = 'block';
-        startBtn.innerText = "START OVERDRIVE";
+        timerLabel.style.display = 'flex'; inputArea.style.display = 'block'; startBtn.innerText = "START OVERDRIVE";
     }
     refreshStats();
 }
-
 document.addEventListener('keydown', (e) => {
     if (!isPlaying || currentMode !== 'flashcards' || isProcessing) return;
     if (!isRevealed) { e.preventDefault(); revealFlashcard(); return; }
@@ -106,13 +120,26 @@ document.addEventListener('keydown', (e) => {
     if (e.key === '2' || e.key === 'ArrowRight') handleFlashcardResult(true);
 });
 
-// --- GAME ---
+// --- GAME START ---
 function startGame() {
     buildQueue();
+    const selectedUnit = document.getElementById('unit-select').value;
+    const totalInUnit = activeDB.filter(item => selectedUnit === 'all' || item.u.toString() === selectedUnit).length;
+
     if(activeQueue.length === 0) {
-        const isStarMode = document.getElementById('star-only-check').checked;
-        alert(isStarMode ? "Geen sterren in deze selectie." : "Alles al gekend! Reset of kies een andere unit.");
-        return;
+        if (totalInUnit === 0) { alert("Geen woorden gevonden in deze selectie."); return; }
+
+        isMaintenanceMode = true;
+        const starOnly = document.getElementById('star-only-check').checked;
+        activeQueue = activeDB.filter(item => {
+            const unitMatch = (selectedUnit === 'all') || (item.u.toString() === selectedUnit);
+            const starMatch = !starOnly || starredMap[item.w];
+            return unitMatch && starMatch;
+        });
+
+        if(activeQueue.length === 0) { alert("Geen woorden beschikbaar met de huidige filters."); return; }
+    } else {
+        isMaintenanceMode = false;
     }
     
     currentMode = document.getElementById('mode-select').value;
@@ -130,29 +157,15 @@ function startGame() {
     const timerDiv = document.getElementById('timer-container-div');
     const timerTxt = document.getElementById('timer');
 
-    inputArea.style.display = 'none'; 
-    gameControls.style.display = 'none';
-    fcControls.style.display = 'none'; 
-    fcStop.style.display = 'none';
-    timerDiv.style.display = 'none'; 
-    timerTxt.style.opacity = '0';
+    inputArea.style.display = 'none'; gameControls.style.display = 'none'; fcControls.style.display = 'none'; 
+    fcStop.style.display = 'none'; timerDiv.style.display = 'none'; timerTxt.style.opacity = '0';
 
     if (currentMode === 'flashcards') {
-        fcControls.style.display = 'flex'; 
-        fcStop.style.display = 'block';
+        fcControls.style.display = 'flex'; fcStop.style.display = 'block';
     } else {
-        inputArea.style.display = 'block'; 
-        gameControls.style.display = 'flex';
-        timerDiv.style.display = 'block'; 
-        timerTxt.style.opacity = '1';
-        
-        const input = document.getElementById('answer-input');
-        input.disabled = false; input.value = ""; input.focus();
-        
-        if (!timerEnabled) {
-            timerTxt.innerText = "∞"; timerTxt.style.color = "var(--accent)";
-            document.getElementById('visual-timer').style.width = "100%";
-        }
+        inputArea.style.display = 'block'; gameControls.style.display = 'flex'; timerDiv.style.display = 'block'; timerTxt.style.opacity = '1';
+        const input = document.getElementById('answer-input'); input.disabled = false; input.value = ""; input.focus();
+        if (!timerEnabled) { timerTxt.innerText = "∞"; timerTxt.style.color = "var(--accent)"; document.getElementById('visual-timer').style.width = "100%"; }
     }
     nextWord();
     if (currentMode !== 'flashcards') gameInterval = setInterval(gameLoop, 100);
@@ -161,7 +174,6 @@ function startGame() {
 function buildQueue() {
     const selectedUnit = document.getElementById('unit-select').value;
     const starOnly = document.getElementById('star-only-check').checked;
-    
     activeQueue = activeDB.filter(item => {
         const level = parseInt(progressMap[item.w] || 0);
         const notMastered = level < 2; 
@@ -178,8 +190,7 @@ function gameLoop() {
         const timerEl = document.getElementById('timer');
         timerEl.innerText = timer.toFixed(1) + 's';
         const bar = document.getElementById('visual-timer');
-        let pct = (timer / VISUAL_MAX_TIME) * 100;
-        if (pct > 100) pct = 100; if (pct < 0) pct = 0;
+        let pct = (timer / VISUAL_MAX_TIME) * 100; if (pct > 100) pct = 100; if (pct < 0) pct = 0;
         bar.style.width = pct + "%";
         if (timer <= 10) { bar.className = "timer-fill danger"; timerEl.style.color = "var(--danger)"; } 
         else { bar.className = "timer-fill"; timerEl.style.color = "var(--accent)"; }
@@ -187,7 +198,7 @@ function gameLoop() {
     }
 }
 
-// --- NEXTWORD (AANGEPAST: Slimmere selectie) ---
+// --- NEXTWORD (3-FASEN LOGICA + ANTI-REPETITIE) ---
 function nextWord() {
     // 1. VICTORY CHECK
     if (activeQueue.length === 0) { 
@@ -201,17 +212,14 @@ function nextWord() {
                 Maar je kan gewoon doordoen...
             </div>
         `;
-
-        // Hervul lijst (Infinite Mode)
+        isMaintenanceMode = true; 
         const selectedUnit = document.getElementById('unit-select').value;
         const starOnly = document.getElementById('star-only-check').checked;
-        
         activeQueue = activeDB.filter(item => {
             const unitMatch = (selectedUnit === 'all') || (item.u.toString() === selectedUnit);
             const starMatch = !starOnly || starredMap[item.w];
             return unitMatch && starMatch;
         });
-
         isPlaying = false; 
         setTimeout(() => {
             if(document.getElementById('input-area').style.display !== 'none') {
@@ -222,54 +230,84 @@ function nextWord() {
         return; 
     }
     
-    // 2. KIES NIEUW WOORD
-    isReviewWord = false; 
-    const starOnly = document.getElementById('star-only-check').checked;
+    // 2. BEREKEN MASTERY (Strict Level 2 count voor de fase-bepaling)
     const selectedUnit = document.getElementById('unit-select').value;
+    const unitWords = activeDB.filter(item => selectedUnit === 'all' || item.u.toString() === selectedUnit);
+    const masteredCount = unitWords.filter(w => parseInt(progressMap[w.w] || 0) === 2).length;
+    const totalCount = unitWords.length;
+    const masteryRatio = totalCount > 0 ? masteredCount / totalCount : 0;
 
-    // A. Review logica (Mastered woorden soms terug laten komen)
-    if (!starOnly) {
-        const unitScopePool = activeDB.filter(item => {
-            return selectedUnit === 'all' || item.u.toString() === selectedUnit;
-        });
-        let masteredInScope = unitScopePool.filter(i => (parseInt(progressMap[i.w] || 0) === 2));
-        const masteryRatio = masteredInScope.length / unitScopePool.length;
+    // 3. KIES NIEUW WOORD
+    let candidates = [...activeQueue];
+    
+    // Anti-repetitie: Filter huidige eruit als er meer dan 1 is
+    if (candidates.length > 1 && currentItem) {
+        candidates = candidates.filter(w => w.w !== currentItem.w);
+    }
 
-        if (masteryRatio > 0.5 && Math.random() < 0.10) {
-            if (masteredInScope.length > 0) {
-                currentItem = masteredInScope[Math.floor(Math.random() * masteredInScope.length)];
-                isReviewWord = true; 
+    let finalPool = candidates;
+
+    if (isMaintenanceMode) {
+        // === FASE 3: ONDERHOUDSMODUS ===
+        let notMasteredCandidates = candidates.filter(w => parseInt(progressMap[w.w] || 0) < 2);
+        let masteredCandidates = candidates.filter(w => parseInt(progressMap[w.w] || 0) === 2);
+
+        if (notMasteredCandidates.length > 0) {
+            if (masteredCandidates.length > 0) {
+                // 25% kans op FOUT, 75% kans op GOED
+                if (Math.random() < 0.25) {
+                    finalPool = notMasteredCandidates; 
+                } else {
+                    finalPool = masteredCandidates; 
+                }
+            } else {
+                finalPool = notMasteredCandidates;
+            }
+        }
+
+    } else {
+        // === NORMALE LEERMODUS ===
+        if (masteryRatio < 0.5) {
+            // === FASE 1: OPBOUWFASE (< 50% Gekend) ===
+            // Gewoon random (finalPool is al 'candidates')
+            finalPool = candidates;
+        } else {
+            // === FASE 2: MASTERFASE (> 50% Gekend) ===
+            let pickedReview = false;
+            
+            // Regel A: 10% Review Injection
+            if (Math.random() < 0.10) {
+                 const starOnly = document.getElementById('star-only-check').checked;
+                 let masteredInScope = unitWords.filter(i => (parseInt(progressMap[i.w] || 0) === 2));
+                 if (starOnly) masteredInScope = masteredInScope.filter(i => starredMap[i.w]);
+
+                 // Anti-Repetitie voor Review woorden
+                 if (currentItem) {
+                     masteredInScope = masteredInScope.filter(w => w.w !== currentItem.w);
+                 }
+
+                 if (masteredInScope.length > 0) {
+                     finalPool = [masteredInScope[Math.floor(Math.random() * masteredInScope.length)]];
+                     pickedReview = true;
+                 }
+            }
+
+            // Regel B: 90% kans op SLECHT woord (uit de valid queue)
+            if (!pickedReview) {
+                let badCandidates = candidates.filter(w => parseInt(progressMap[w.w] || 0) === -1);
+                // We kiezen alleen als ze beschikbaar zijn
+                if (badCandidates.length > 0 && Math.random() < 0.9) {
+                    finalPool = badCandidates;
+                }
             }
         }
     }
-    
-    // B. Standaard selectie (HIER IS DE WIJZIGING)
-    if (!isReviewWord) {
-        let candidates = [...activeQueue];
-        
-        // Zorg dat we niet direct hetzelfde woord kiezen (als er meer keuze is)
-        if (candidates.length > 1 && currentItem) {
-            candidates = candidates.filter(w => w.w !== currentItem.w);
-        }
 
-        // --- INTELLIGENTE SELECTIE START ---
-        // Filter de woorden die 'Slecht' (-1) zijn
-        let badCandidates = candidates.filter(w => parseInt(progressMap[w.w] || 0) === -1);
-
-        let finalPool = candidates;
-
-        // Als er slechte woorden zijn, geef ze 50% kans om uit die groep te kiezen.
-        // Dit zorgt ervoor dat ze VAKER komen, maar niet ALTIJD.
-        if (badCandidates.length > 0 && Math.random() < 0.5) {
-            finalPool = badCandidates;
-        }
-        // --- INTELLIGENTE SELECTIE EINDE ---
-
-        if(finalPool.length > 0) {
-            currentItem = finalPool[Math.floor(Math.random() * finalPool.length)];
-        } else {
-            currentItem = candidates[0]; // Fallback
-        }
+    if(finalPool.length > 0) {
+        currentItem = finalPool[Math.floor(Math.random() * finalPool.length)];
+    } else {
+        // Fallback voor safety
+        currentItem = candidates[0] || activeQueue[0];
     }
     
     isRevealed = false;
@@ -281,7 +319,6 @@ function nextWord() {
 function renderGameUI() {
     const area = document.getElementById('definition-area');
     area.classList.remove('fc-feedback-good', 'fc-feedback-bad');
-    
     let contentHtml = "";
 
     if (currentMode === 'flashcards') {
@@ -295,10 +332,10 @@ function renderGameUI() {
         document.getElementById('answer-input').value = "";
     }
 
-    if (isReviewWord) {
+    const isMastered = parseInt(progressMap[currentItem.w] || 0) === 2;
+    if (isMastered) {
         contentHtml += `<div style="font-size: 0.8rem; color: #facc15; margin-top: 15px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">✨ Review: Al Gekend</div>`;
     }
-
     area.innerHTML = contentHtml;
 }
 
@@ -311,19 +348,13 @@ document.getElementById('answer-input').addEventListener('input', (e) => {
     if (val === correct) { handleCorrect(); return; }
 
     const mistakeItem = activeDB.find(item => item.w.toLowerCase() === val);
-    
     if (mistakeItem) {
         if (!correct.startsWith(val)) {
-            // A. Straf het WOORD dat je typte
             updateStats(mistakeItem.w, false); 
-
-            // B. Zet progressie van het getypte woord terug
             progressMap[mistakeItem.w] = -1;
             starredMap[mistakeItem.w] = true;
-            
+            if (!activeQueue.some(i => i.w === mistakeItem.w)) activeQueue.push(mistakeItem);
             saveProgress(); 
-            
-            // C. Reken het HUIDIGE woord ook fout
             passWord(false, true); 
         }
     }
@@ -343,12 +374,10 @@ function passWord(skipVisuals = false, isConfusion = false) {
     }
 
     updateStats(currentItem.w, false);
+    progressMap[currentItem.w] = -1; 
+    starredMap[currentItem.w] = true;
 
-    if (isReviewWord) {
-        progressMap[currentItem.w] = 1; activeQueue.push(currentItem);
-    } else {
-        progressMap[currentItem.w] = -1; starredMap[currentItem.w] = true;
-    }
+    if (!activeQueue.some(i => i.w === currentItem.w)) activeQueue.push(currentItem);
     saveProgress();
 }
 
@@ -357,22 +386,20 @@ function handleCorrect(skipVisuals = false) {
         const inputEl = document.getElementById('answer-input');
         inputEl.classList.add('flash-green'); setTimeout(() => inputEl.classList.remove('flash-green'), 300);
     }
-    
     updateStats(currentItem.w, true);
 
-    if (!isReviewWord) {
-        let lvl = parseInt(progressMap[currentItem.w] || 0);
-        if (lvl === -1) lvl = 1; 
-        else if (lvl === 0) lvl = 1; 
-        else if (lvl === 1) lvl = 2;
-        
-        progressMap[currentItem.w] = lvl;
-        
-        if (lvl === 2) {
-            activeQueue = activeQueue.filter(i => i.w !== currentItem.w);
-        }
-        saveProgress();
+    let lvl = parseInt(progressMap[currentItem.w] || 0);
+    if (lvl === -1) lvl = 1; 
+    else if (lvl === 0) lvl = 1; 
+    else if (lvl === 1) lvl = 2;
+    
+    progressMap[currentItem.w] = lvl;
+    
+    if (lvl === 2) {
+        activeQueue = activeQueue.filter(i => i.w !== currentItem.w);
     }
+    saveProgress();
+
     if (timerEnabled && currentMode === 'overdrive') timer = Math.min(timer + 10, VISUAL_MAX_TIME);
     score++; document.getElementById('score').innerText = score;
     nextWord();
@@ -397,9 +424,9 @@ window.handleFlashcardResult = function(success) {
     }, 500);
 }
 
+// --- STATS EN PROGRESS BARS (GEDEELTELIJKE PUNTEN) ---
 function refreshStats() {
     if (!activeDB || activeDB.length === 0) return;
-
     const selectedUnit = document.getElementById('unit-select').value;
     const filteredDB = activeDB.filter(item => {
         return selectedUnit === 'all' || item.u.toString() === selectedUnit;
@@ -414,10 +441,7 @@ function refreshStats() {
         counts[l]++;
         if(starredMap[i.w]) starCountInUnit++;
     });
-
-    activeDB.forEach(i => {
-        if(starredMap[i.w]) totalStarCount++;
-    });
+    activeDB.forEach(i => { if(starredMap[i.w]) totalStarCount++; });
     
     document.getElementById('cnt-new').innerText = counts[0]; 
     document.getElementById('cnt-bad').innerText = counts[-1];
@@ -426,13 +450,14 @@ function refreshStats() {
     document.getElementById('cnt-star').innerText = "★ " + starCountInUnit;
 
     const resetBtn = document.getElementById('btn-reset-star');
-    if(resetBtn) {
-        resetBtn.innerText = `Reset ★ (${totalStarCount})`;
-    }
+    if(resetBtn) resetBtn.innerText = `Reset ★ (${totalStarCount})`;
     
     const sOnly = document.getElementById('star-only-check').checked;
+    // Voor de progress bar gebruiken we de gefilterde lijst (op unit) 
+    // EN filteren we op sterren als dat aanstaat.
     const rel = filteredDB.filter(i => (!sOnly || starredMap[i.w]));
     
+    // --- GEDEELTELIJKE PUNTEN VOOR PROGRESS BAR ---
     let pts = 0; 
     rel.forEach(i => { 
         let l = parseInt(progressMap[i.w] || 0); 
@@ -442,7 +467,7 @@ function refreshStats() {
     });
     
     const max = rel.length * 3; 
-    const pct = max > 0 ? ((pts/max)*100).toFixed(2) : "0.00";
+    const pct = max > 0 ? Math.floor((pts/max)*100) : 0;
     
     document.getElementById('mastery-bar').style.width = pct + "%"; 
     document.getElementById('mastery-pct').innerText = pct + "%";
@@ -452,33 +477,30 @@ function refreshStats() {
 function populateUnitDropdown() {
     const s = document.getElementById('unit-select');
     const currentSelection = s.value; 
-    
     s.innerHTML = '<option value="all">Alle Units</option>';
     if (!activeDB) return;
 
     [...new Set(activeDB.map(i => i.u))].sort((a, b) => a - b).forEach(u => {
-        let o = document.createElement('option'); 
-        o.value = u;
+        let o = document.createElement('option'); o.value = u;
         
-        let tot = activeDB.filter(w => w.u === u).length; 
-        let mast = activeDB.filter(w => w.u === u && parseInt(progressMap[w.w] || 0) === 2).length;
+        let unitWords = activeDB.filter(w => w.u === u);
         
-        let pct = tot > 0 ? Math.floor((mast / tot) * 100) : 0;
+        // --- GEDEELTELIJKE PUNTEN VOOR DROPDOWN ---
+        let pts = 0;
+        unitWords.forEach(w => {
+             let l = parseInt(progressMap[w.w]||0);
+             if(l===2) pts+=3;
+             else if(l===1) pts+=2;
+             else if(l===-1) pts+=1;
+        });
+        let max = unitWords.length * 3;
+        let pct = max > 0 ? Math.floor((pts/max)*100) : 0;
 
-        if (pct === 100) {
-            o.innerText = `Unit ${u} (100% ✅)`;
-        } else {
-            o.innerText = `Unit ${u} (${pct}%)`;
-        }
+        o.innerText = pct === 100 ? `Unit ${u} (100% ✅)` : `Unit ${u} (${pct}%)`;
         s.appendChild(o);
     });
-    
-    if (currentSelection && s.querySelector(`option[value="${currentSelection}"]`)) {
-        s.value = currentSelection;
-    } else {
-        const saved = localStorage.getItem('vocab_last_unit'); 
-        if(saved && s.querySelector(`option[value="${saved}"]`)) s.value = saved; 
-    }
+    if (currentSelection && s.querySelector(`option[value="${currentSelection}"]`)) s.value = currentSelection;
+    else { const saved = localStorage.getItem('vocab_last_unit'); if(saved && s.querySelector(`option[value="${saved}"]`)) s.value = saved; }
 }
 
 function saveUnitSelection() { localStorage.setItem('vocab_last_unit', document.getElementById('unit-select').value); }
@@ -489,9 +511,7 @@ function resetSpecificUnit() {
 }
 
 function stopGame() { 
-    isPlaying = false; 
-    clearInterval(gameInterval); 
-
+    isPlaying = false; clearInterval(gameInterval); 
     document.getElementById('input-area').style.display = 'none';
     document.getElementById('game-controls').style.display = 'none';
     document.getElementById('fc-controls').style.display = 'none';
@@ -499,24 +519,9 @@ function stopGame() {
     document.getElementById('timer-container-div').style.display = 'none';
     document.getElementById('timer').style.opacity = '0';
     document.getElementById('btn-show-answer').style.display = 'none';
-
     const area = document.getElementById('definition-area');
-    area.innerHTML = `
-        <div style="margin-bottom: 15px;">
-            <span style="font-size: 3rem;">🛑</span>
-        </div>
-        <div style="color: var(--danger); font-weight: bold; font-size: 1.5rem; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">
-            Spel Gestopt
-        </div>
-        <div style="color: var(--text-muted); font-size: 1.1rem;">
-            Je eindscore is: <span style="color: var(--accent); font-weight: bold; font-size: 1.3rem;">${score}</span>
-        </div>
-    `;
-
-    const startBtn = document.getElementById('start-btn');
-    startBtn.innerText = "Opnieuw Spelen";
-    startBtn.style.display = 'block';
-    
+    area.innerHTML = `<div style="margin-bottom: 15px;"><span style="font-size: 3rem;">🛑</span></div><div style="color: var(--danger); font-weight: bold; font-size: 1.5rem; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">Spel Gestopt</div><div style="color: var(--text-muted); font-size: 1.1rem;">Je eindscore is: <span style="color: var(--accent); font-weight: bold; font-size: 1.3rem;">${score}</span></div>`;
+    const startBtn = document.getElementById('start-btn'); startBtn.innerText = "Opnieuw Spelen"; startBtn.style.display = 'block';
     document.getElementById('settings-div').style.display = 'flex';
 }
 
@@ -540,10 +545,7 @@ function importData(input) {
             if (data.s) starredMap = data.s;
             if (data.st) wordStats = data.st; 
             else if (data.progress) { progressMap = data.progress; starredMap = data.starred; } 
-            
-            saveProgress(); 
-            localStorage.setItem('vocab_stats', JSON.stringify(wordStats)); 
-            alert("Backup geladen!"); location.reload();
+            saveProgress(); localStorage.setItem('vocab_stats', JSON.stringify(wordStats)); alert("Backup geladen!"); location.reload();
         } catch (err) { alert("Fout bij lezen bestand."); }
     }; reader.readAsText(file);
     input.value = '';
@@ -553,32 +555,21 @@ function showList(t) {
     currentListType = t;
     const m=document.getElementById('list-modal'), b=document.getElementById('modal-list-body'), h=document.getElementById('modal-title');
     let w=[], c="";
-
     if (!activeDB) return;
-
     const selectedUnit = document.getElementById('unit-select').value;
-    const filteredDB = activeDB.filter(item => {
-        return selectedUnit === 'all' || item.u.toString() === selectedUnit;
-    });
+    const filteredDB = activeDB.filter(item => selectedUnit === 'all' || item.u.toString() === selectedUnit);
 
-    if(t==='star'){
-        h.innerText="Gemarkeerd (in deze unit)"; c="var(--gold)";
-        w=filteredDB.filter(i=>starredMap[i.w]);
-    } else {
+    if(t==='star'){ h.innerText="Gemarkeerd (in deze unit)"; c="var(--gold)"; w=filteredDB.filter(i=>starredMap[i.w]); } 
+    else {
         const labels = {0:"Niet Gekend",'-1':"Slecht Gekend",1:"Goed Gekend",2:"Volledig Gekend"};
         const colors = {0:"#94a3b8",'-1':"var(--danger)",1:"var(--gold)",2:"var(--success)"};
-        h.innerText=labels[t]; c=colors[t];
-        w=filteredDB.filter(i=>(parseInt(progressMap[i.w]||0)===t));
+        h.innerText=labels[t]; c=colors[t]; w=filteredDB.filter(i=>(parseInt(progressMap[i.w]||0)===t));
     }
-
     h.style.color=c; b.innerHTML="";
-
-    if(w.length === 0) {
-        b.innerHTML = "<div style='text-align:center; padding:20px; color:#666;'>Geen woorden gevonden in deze categorie (voor deze unit).</div>";
-    } else {
+    if(w.length === 0) b.innerHTML = "<div style='text-align:center; padding:20px; color:#666;'>Geen woorden gevonden.</div>";
+    else {
         w.forEach(i=>{
-            const d=document.createElement('div');
-            d.className='list-item';
+            const d=document.createElement('div'); d.className='list-item';
             d.innerHTML=`<span>${i.w}</span><span style="cursor:pointer; font-size:1.2rem;" onclick="toggleStar('${i.w.replace(/'/g,"\\'")}')">${starredMap[i.w]?'★':'☆'}</span>`;
             b.appendChild(d);
         });
@@ -587,76 +578,82 @@ function showList(t) {
 }
 
 function toggleStar(w) {
-    if(starredMap[w]) delete starredMap[w];
-    else starredMap[w]=true;
-
+    if(starredMap[w]) delete starredMap[w]; else starredMap[w]=true;
     saveProgress();
-
     if (currentListType !== null) {
-        const listBody = document.getElementById('modal-list-body');
-        const scrollPos = listBody.scrollTop;
-        showList(currentListType);
-        document.getElementById('modal-list-body').scrollTop = scrollPos;
+        const listBody = document.getElementById('modal-list-body'); const scrollPos = listBody.scrollTop;
+        showList(currentListType); document.getElementById('modal-list-body').scrollTop = scrollPos;
     }
 }
 
-function closeModal() {
-    document.getElementById('list-modal').style.display='none';
-    currentListType = null;
-}
+function closeModal() { document.getElementById('list-modal').style.display='none'; currentListType = null; }
+window.onclick = e => { if(e.target == document.getElementById('list-modal')) closeModal(); if(e.target == document.getElementById('ranking-modal')) closeRanking(); }
+function saveProgress() { localStorage.setItem('vocab_progress_v2', JSON.stringify(progressMap)); localStorage.setItem('vocab_starred', JSON.stringify(starredMap)); refreshStats(); populateUnitDropdown(); }
 
-window.onclick = e => { 
-    if(e.target == document.getElementById('list-modal')) closeModal(); 
-    if(e.target == document.getElementById('ranking-modal')) closeRanking(); 
-}
-
-function saveProgress() {
-    localStorage.setItem('vocab_progress_v2', JSON.stringify(progressMap));
-    localStorage.setItem('vocab_starred', JSON.stringify(starredMap));
-    refreshStats();
-    populateUnitDropdown(); 
-}
-
+// --- RANKING MET 0/0 ONDERAAN ---
 function showRanking() {
     const m = document.getElementById('ranking-modal');
     const b = document.getElementById('ranking-body');
     b.innerHTML = "";
 
-    let list = Object.keys(wordStats).map(word => {
-        const s = wordStats[word];
+    if (!activeDB) return;
+
+    const selectedUnit = document.getElementById('unit-select').value;
+    const scopeWords = activeDB.filter(item => selectedUnit === 'all' || item.u.toString() === selectedUnit);
+
+    let list = scopeWords.map(item => {
+        const s = wordStats[item.w] || { c: 0, t: 0 };
         const pct = s.t > 0 ? (s.c / s.t) * 100 : 0;
-        return { w: word, pct: pct, c: s.c, t: s.t };
-    }).filter(i => i.t > 0);
+        return { w: item.w, pct: pct, c: s.c, t: s.t };
+    });
 
     list.sort((a, b) => {
-        if (Math.abs(b.pct - a.pct) > 0.1) { 
-            return b.pct - a.pct;
-        }
+        if (a.t === 0 && b.t > 0) return 1;
+        if (b.t === 0 && a.t > 0) return -1;
+        if (Math.abs(b.pct - a.pct) > 0.1) return b.pct - a.pct;
         return b.c - a.c; 
     });
 
+    let totalCorrect = 0; let totalAttempts = 0;
+    list.forEach(i => { totalCorrect += i.c; totalAttempts += i.t; });
+
+    if (list.length > 0) {
+        const summary = document.createElement('div');
+        summary.style.cssText = "text-align:center; padding:15px; background:rgba(255,255,255,0.05); border-radius:8px; margin-bottom:15px; border:1px solid var(--glass-border);";
+        summary.innerHTML = `
+            <div style="font-size:0.8rem; text-transform:uppercase; color:#94a3b8; letter-spacing:1px;">Totaal Score</div>
+            <div style="font-size:2rem; font-weight:bold; color:var(--accent);">
+                ${totalCorrect} <span style="color:#64748b; font-size:1.5rem;">/</span> ${totalAttempts}
+            </div>
+            <div style="font-size:0.9rem; color:${getScoreColor((totalCorrect/totalAttempts)*100)}">
+                ${totalAttempts > 0 ? ((totalCorrect/totalAttempts)*100).toFixed(1) : 0}%
+            </div>
+        `;
+        b.appendChild(summary);
+    }
+
     if (list.length === 0) {
-        b.innerHTML = "<div style='text-align:center; padding:20px; color:#666;'>Nog geen statistieken. Speel eerst een spel!</div>";
+        b.innerHTML = "<div style='text-align:center; padding:20px; color:#666;'>Geen woorden in deze selectie.</div>";
     } else {
         const table = document.createElement('table');
         table.className = "rank-table";
         table.innerHTML = `<thead><tr><th>#</th><th>Woord</th><th>Score</th><th>J/T</th></tr></thead><tbody></tbody>`;
-        
         const tbody = table.querySelector('tbody');
         
         list.forEach((item, index) => {
-            const row = document.createElement('tr');
-            row.className = "rank-row";
+            const row = document.createElement('tr'); row.className = "rank-row";
             
             let rankClass = "";
-            if(index === 0) rankClass = "rank-1";
-            else if(index === 1) rankClass = "rank-2";
-            else if(index === 2) rankClass = "rank-3";
+            if (item.t > 0) {
+                if(index === 0) rankClass = "rank-1";
+                else if(index === 1) rankClass = "rank-2";
+                else if(index === 2) rankClass = "rank-3";
+            }
 
             row.innerHTML = `
                 <td class="${rankClass}">${index + 1}</td>
                 <td style="font-weight:bold;">${item.w}</td>
-                <td style="color:${getScoreColor(item.pct)}">${item.pct.toFixed(0)}%</td>
+                <td style="color:${item.t > 0 ? getScoreColor(item.pct) : '#666'}">${item.t > 0 ? item.pct.toFixed(0) + '%' : '-'}</td>
                 <td style="font-size:0.8rem; color:#888;">${item.c}/${item.t}</td>
             `;
             tbody.appendChild(row);
@@ -672,6 +669,4 @@ function getScoreColor(pct) {
     return "var(--danger)";
 }
 
-function closeRanking() {
-    document.getElementById('ranking-modal').style.display = 'none';
-}
+function closeRanking() { document.getElementById('ranking-modal').style.display = 'none'; }
