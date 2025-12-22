@@ -40,6 +40,12 @@
                     <span class="label">Marked</span>
                 </div>
             </div>
+
+            <div style="margin-top:15px; width:100%;">
+                <button class="btn" style="background:var(--card-bg); border:1px solid var(--accent); color:var(--accent); font-size:0.9rem;" onclick="showRanking()">
+                    🏆 Klassement
+                </button>
+            </div>
         </div>
 
         <div class="game-container">
@@ -117,7 +123,9 @@
                 <div style="height:10px;"></div>
 
                 <button class="btn-danger-action" onclick="resetSpecificUnit()">Reset Unit...</button>
-                <button class="btn-danger-action" onclick="resetStarredToNew()">Reset ★ (0)</button>
+                
+                <button id="btn-reset-star" class="btn-danger-action" onclick="resetStarredToNew()">Reset ★ (0)</button>
+                
                 <button class="btn-danger-action" onclick="unstarAll()">Verwijder ★</button>
 
                 <div style="height:10px;"></div>
@@ -126,8 +134,8 @@
             </div>
         </div>
 
-    </div> 
-    
+    </div>
+
     <div class="modal" id="list-modal">
         <div class="modal-content">
             <div class="modal-header" style="display:flex;justify-content:space-between;color:white;border-bottom:1px solid #333;padding-bottom:10px;margin-bottom:10px;">
@@ -135,6 +143,17 @@
                 <button class="close-btn" onclick="closeModal()" style="background:none;border:none;color:white;font-size:1.5rem;cursor:pointer;">&times;</button>
             </div>
             <div class="word-list" id="modal-list-body"></div>
+        </div>
+    </div>
+
+    <div class="modal" id="ranking-modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header" style="display:flex;justify-content:space-between;border-bottom:1px solid #333;padding-bottom:10px;margin-bottom:10px;">
+                <h2 style="margin:0; color:var(--gold);">🏆 Woord Klassement</h2>
+                <button class="close-btn" onclick="closeRanking()" style="background:none;border:none;color:white;font-size:1.5rem;cursor:pointer;">&times;</button>
+            </div>
+            <div class="word-list" id="ranking-body">
+                </div>
         </div>
     </div>
 

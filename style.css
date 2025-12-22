@@ -242,3 +242,12 @@ option { background: #0f172a; }
 .modal-content { background: #1e293b; width: 90%; max-width: 500px; border-radius: 12px; padding: 20px; border: 1px solid var(--glass-border); box-shadow: 0 20px 50px rgba(0,0,0,0.5); max-height: 80vh; display: flex; flex-direction: column; }
 .word-list { overflow-y: auto; flex: 1; }
 .list-item { padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; }
+
+/* Klassement Tabel */
+.rank-table { width: 100%; border-collapse: collapse; color: white; }
+.rank-table th { text-align: left; border-bottom: 2px solid var(--accent); padding: 8px; color: var(--accent); }
+.rank-table td { border-bottom: 1px solid rgba(255,255,255,0.1); padding: 8px; }
+.rank-row:hover { background: rgba(255,255,255,0.05); }
+.rank-1 { color: #ffd700; font-weight: bold; } /* Goud */
+.rank-2 { color: #c0c0c0; font-weight: bold; } /* Zilver */
+.rank-3 { color: #cd7f32; font-weight: bold; } /* Brons */
