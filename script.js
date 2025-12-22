@@ -9,7 +9,6 @@ let currentItem = null;
 let score = 0;
 let currentListType = null;
 
-// Houdt bij of we in de "Alles Gekend" fase zitten (Fase 3)
 let isMaintenanceMode = false; 
 
 const START_TIME = 25.0;
@@ -100,7 +99,12 @@ function resetProgress() {
 }
 
 // --- UI ---
-function handleSettingsChange() { saveUnitSelection(); refreshStats(); }
+function handleSettingsChange() { 
+    saveUnitSelection(); 
+    refreshStats(); 
+    populateUnitDropdown(); 
+}
+
 function toggleSettingsUI() {
     const mode = document.getElementById('mode-select').value;
     const timerLabel = document.getElementById('timer-toggle-label');
@@ -124,13 +128,18 @@ document.addEventListener('keydown', (e) => {
 function startGame() {
     buildQueue();
     const selectedUnit = document.getElementById('unit-select').value;
-    const totalInUnit = activeDB.filter(item => selectedUnit === 'all' || item.u.toString() === selectedUnit).length;
+    const starOnly = document.getElementById('star-only-check').checked;
+    
+    const totalInSelection = activeDB.filter(item => {
+        const unitMatch = (selectedUnit === 'all' || item.u.toString() === selectedUnit);
+        const starMatch = !starOnly || starredMap[item.w];
+        return unitMatch && starMatch;
+    }).length;
 
     if(activeQueue.length === 0) {
-        if (totalInUnit === 0) { alert("Geen woorden gevonden in deze selectie."); return; }
+        if (totalInSelection === 0) { alert("Geen woorden gevonden in deze selectie."); return; }
 
         isMaintenanceMode = true;
-        const starOnly = document.getElementById('star-only-check').checked;
         activeQueue = activeDB.filter(item => {
             const unitMatch = (selectedUnit === 'all') || (item.u.toString() === selectedUnit);
             const starMatch = !starOnly || starredMap[item.w];
@@ -200,7 +209,6 @@ function gameLoop() {
 
 // --- NEXTWORD (3-FASEN LOGICA + ANTI-REPETITIE) ---
 function nextWord() {
-    // 1. VICTORY CHECK
     if (activeQueue.length === 0) { 
         fireConfetti();
         const area = document.getElementById('definition-area');
@@ -230,17 +238,23 @@ function nextWord() {
         return; 
     }
     
-    // 2. BEREKEN MASTERY (Strict Level 2 count voor de fase-bepaling)
+    // Bereken mastery percentage
     const selectedUnit = document.getElementById('unit-select').value;
-    const unitWords = activeDB.filter(item => selectedUnit === 'all' || item.u.toString() === selectedUnit);
+    const starOnly = document.getElementById('star-only-check').checked;
+    
+    const unitWords = activeDB.filter(item => {
+        const unitMatch = (selectedUnit === 'all' || item.u.toString() === selectedUnit);
+        const starMatch = !starOnly || starredMap[item.w];
+        return unitMatch && starMatch;
+    });
+
     const masteredCount = unitWords.filter(w => parseInt(progressMap[w.w] || 0) === 2).length;
     const totalCount = unitWords.length;
     const masteryRatio = totalCount > 0 ? masteredCount / totalCount : 0;
 
-    // 3. KIES NIEUW WOORD
+    // Kies nieuw woord
     let candidates = [...activeQueue];
     
-    // Anti-repetitie: Filter huidige eruit als er meer dan 1 is
     if (candidates.length > 1 && currentItem) {
         candidates = candidates.filter(w => w.w !== currentItem.w);
     }
@@ -248,54 +262,37 @@ function nextWord() {
     let finalPool = candidates;
 
     if (isMaintenanceMode) {
-        // === FASE 3: ONDERHOUDSMODUS ===
+        // FASE 3
         let notMasteredCandidates = candidates.filter(w => parseInt(progressMap[w.w] || 0) < 2);
         let masteredCandidates = candidates.filter(w => parseInt(progressMap[w.w] || 0) === 2);
 
         if (notMasteredCandidates.length > 0) {
             if (masteredCandidates.length > 0) {
-                // 25% kans op FOUT, 75% kans op GOED
-                if (Math.random() < 0.25) {
-                    finalPool = notMasteredCandidates; 
-                } else {
-                    finalPool = masteredCandidates; 
-                }
+                if (Math.random() < 0.25) { finalPool = notMasteredCandidates; } 
+                else { finalPool = masteredCandidates; }
             } else {
                 finalPool = notMasteredCandidates;
             }
         }
-
     } else {
-        // === NORMALE LEERMODUS ===
+        // NORMALE LEERMODUS
         if (masteryRatio < 0.5) {
-            // === FASE 1: OPBOUWFASE (< 50% Gekend) ===
-            // Gewoon random (finalPool is al 'candidates')
+            // FASE 1
             finalPool = candidates;
         } else {
-            // === FASE 2: MASTERFASE (> 50% Gekend) ===
+            // FASE 2
             let pickedReview = false;
-            
-            // Regel A: 10% Review Injection
             if (Math.random() < 0.10) {
-                 const starOnly = document.getElementById('star-only-check').checked;
                  let masteredInScope = unitWords.filter(i => (parseInt(progressMap[i.w] || 0) === 2));
-                 if (starOnly) masteredInScope = masteredInScope.filter(i => starredMap[i.w]);
-
-                 // Anti-Repetitie voor Review woorden
-                 if (currentItem) {
-                     masteredInScope = masteredInScope.filter(w => w.w !== currentItem.w);
-                 }
+                 if (currentItem) masteredInScope = masteredInScope.filter(w => w.w !== currentItem.w);
 
                  if (masteredInScope.length > 0) {
                      finalPool = [masteredInScope[Math.floor(Math.random() * masteredInScope.length)]];
                      pickedReview = true;
                  }
             }
-
-            // Regel B: 90% kans op SLECHT woord (uit de valid queue)
             if (!pickedReview) {
                 let badCandidates = candidates.filter(w => parseInt(progressMap[w.w] || 0) === -1);
-                // We kiezen alleen als ze beschikbaar zijn
                 if (badCandidates.length > 0 && Math.random() < 0.9) {
                     finalPool = badCandidates;
                 }
@@ -306,7 +303,6 @@ function nextWord() {
     if(finalPool.length > 0) {
         currentItem = finalPool[Math.floor(Math.random() * finalPool.length)];
     } else {
-        // Fallback voor safety
         currentItem = candidates[0] || activeQueue[0];
     }
     
@@ -316,19 +312,44 @@ function nextWord() {
     renderGameUI();
 }
 
+// --- NIEUW: HELPER OM LIVE TE STERREN ---
+function toggleStarCurrent(word) {
+    if(starredMap[word]) delete starredMap[word];
+    else starredMap[word] = true;
+    
+    saveProgress(); // Slaat op en ververst stats/menu
+    renderGameUI(); // Ververst het sterretje in beeld
+}
+
+// --- RENDER UI (NU MET STER INDICATOR) ---
 function renderGameUI() {
     const area = document.getElementById('definition-area');
+    // Zorg voor relative positioning voor de ster
+    area.style.position = 'relative'; 
     area.classList.remove('fc-feedback-good', 'fc-feedback-bad');
+    
+    // Bepaal ster status
+    const isStarred = starredMap[currentItem.w];
+    const starIcon = isStarred ? "★" : "☆";
+    const starColor = isStarred ? "var(--gold)" : "#555";
+    
+    // HTML voor de klikbare ster
+    const starHtml = `<div style="position:absolute; top:10px; right:15px; font-size:1.8rem; color:${starColor}; cursor:pointer; z-index:10; user-select:none;" onclick="toggleStarCurrent('${currentItem.w.replace(/'/g, "\\'")}')" title="Klik om te markeren">${starIcon}</div>`;
+
     let contentHtml = "";
 
     if (currentMode === 'flashcards') {
         contentHtml = `
             <div class="flashcard-content" onclick="if(!isRevealed) revealFlashcard()">
+                ${starHtml}
                 <div class="fc-face fc-front">${currentItem.d}</div>
                 <div class="fc-face fc-back">${currentItem.w}</div>
             </div>`;
     } else {
-        contentHtml = currentItem.d;
+        contentHtml = `
+            ${starHtml}
+            <div style="margin-top:10px;">${currentItem.d}</div>
+        `;
         document.getElementById('answer-input').value = "";
     }
 
@@ -424,49 +445,50 @@ window.handleFlashcardResult = function(success) {
     }, 500);
 }
 
-// --- STATS EN PROGRESS BARS (GEDEELTELIJKE PUNTEN) ---
+// --- STATS EN PROGRESS BARS ---
 function refreshStats() {
     if (!activeDB || activeDB.length === 0) return;
     const selectedUnit = document.getElementById('unit-select').value;
-    const filteredDB = activeDB.filter(item => {
+    const sOnly = document.getElementById('star-only-check').checked;
+
+    const unitScopeDB = activeDB.filter(item => {
         return selectedUnit === 'all' || item.u.toString() === selectedUnit;
     });
 
-    let counts = { "-1": 0, "0": 0, "1": 0, "2": 0 };
-    let starCountInUnit = 0;
-    let totalStarCount = 0; 
+    const displayDB = unitScopeDB.filter(item => {
+        return !sOnly || starredMap[item.w];
+    });
 
-    filteredDB.forEach(i => {
+    let counts = { "-1": 0, "0": 0, "1": 0, "2": 0 };
+    let starCountForCard = 0; 
+    let totalStarCountGlobal = 0; 
+
+    displayDB.forEach(i => {
         let l = parseInt(progressMap[i.w] || 0);
         counts[l]++;
-        if(starredMap[i.w]) starCountInUnit++;
     });
-    activeDB.forEach(i => { if(starredMap[i.w]) totalStarCount++; });
+
+    unitScopeDB.forEach(i => { if(starredMap[i.w]) starCountForCard++; });
+    activeDB.forEach(i => { if(starredMap[i.w]) totalStarCountGlobal++; });
     
     document.getElementById('cnt-new').innerText = counts[0]; 
     document.getElementById('cnt-bad').innerText = counts[-1];
     document.getElementById('cnt-good').innerText = counts[1]; 
     document.getElementById('cnt-full').innerText = counts[2];
-    document.getElementById('cnt-star').innerText = "★ " + starCountInUnit;
+    document.getElementById('cnt-star').innerText = "★ " + starCountForCard;
 
     const resetBtn = document.getElementById('btn-reset-star');
-    if(resetBtn) resetBtn.innerText = `Reset ★ (${totalStarCount})`;
+    if(resetBtn) resetBtn.innerText = `Reset ★ (${totalStarCountGlobal})`;
     
-    const sOnly = document.getElementById('star-only-check').checked;
-    // Voor de progress bar gebruiken we de gefilterde lijst (op unit) 
-    // EN filteren we op sterren als dat aanstaat.
-    const rel = filteredDB.filter(i => (!sOnly || starredMap[i.w]));
-    
-    // --- GEDEELTELIJKE PUNTEN VOOR PROGRESS BAR ---
     let pts = 0; 
-    rel.forEach(i => { 
+    displayDB.forEach(i => { 
         let l = parseInt(progressMap[i.w] || 0); 
         if(l===2) pts+=3; 
         else if(l===1) pts+=2; 
         else if(l===-1) pts+=1; 
     });
     
-    const max = rel.length * 3; 
+    const max = displayDB.length * 3; 
     const pct = max > 0 ? Math.floor((pts/max)*100) : 0;
     
     document.getElementById('mastery-bar').style.width = pct + "%"; 
@@ -480,12 +502,17 @@ function populateUnitDropdown() {
     s.innerHTML = '<option value="all">Alle Units</option>';
     if (!activeDB) return;
 
+    const starOnly = document.getElementById('star-only-check') ? document.getElementById('star-only-check').checked : false;
+
     [...new Set(activeDB.map(i => i.u))].sort((a, b) => a - b).forEach(u => {
         let o = document.createElement('option'); o.value = u;
         
-        let unitWords = activeDB.filter(w => w.u === u);
+        let unitWords = activeDB.filter(w => {
+            const unitMatch = w.u === u;
+            const starMatch = !starOnly || starredMap[w.w];
+            return unitMatch && starMatch;
+        });
         
-        // --- GEDEELTELIJKE PUNTEN VOOR DROPDOWN ---
         let pts = 0;
         unitWords.forEach(w => {
              let l = parseInt(progressMap[w.w]||0);
@@ -496,7 +523,7 @@ function populateUnitDropdown() {
         let max = unitWords.length * 3;
         let pct = max > 0 ? Math.floor((pts/max)*100) : 0;
 
-        o.innerText = pct === 100 ? `Unit ${u} (100% ✅)` : `Unit ${u} (${pct}%)`;
+        o.innerText = (pct === 100 && max > 0) ? `Unit ${u} (100% ✅)` : `Unit ${u} (${pct}%)`;
         s.appendChild(o);
     });
     if (currentSelection && s.querySelector(`option[value="${currentSelection}"]`)) s.value = currentSelection;
@@ -590,7 +617,6 @@ function closeModal() { document.getElementById('list-modal').style.display='non
 window.onclick = e => { if(e.target == document.getElementById('list-modal')) closeModal(); if(e.target == document.getElementById('ranking-modal')) closeRanking(); }
 function saveProgress() { localStorage.setItem('vocab_progress_v2', JSON.stringify(progressMap)); localStorage.setItem('vocab_starred', JSON.stringify(starredMap)); refreshStats(); populateUnitDropdown(); }
 
-// --- RANKING MET 0/0 ONDERAAN ---
 function showRanking() {
     const m = document.getElementById('ranking-modal');
     const b = document.getElementById('ranking-body');
@@ -642,14 +668,12 @@ function showRanking() {
         
         list.forEach((item, index) => {
             const row = document.createElement('tr'); row.className = "rank-row";
-            
             let rankClass = "";
             if (item.t > 0) {
                 if(index === 0) rankClass = "rank-1";
                 else if(index === 1) rankClass = "rank-2";
                 else if(index === 2) rankClass = "rank-3";
             }
-
             row.innerHTML = `
                 <td class="${rankClass}">${index + 1}</td>
                 <td style="font-weight:bold;">${item.w}</td>
