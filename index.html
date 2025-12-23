@@ -6,7 +6,9 @@
     <title>VOCAB MASTER: CYBER</title>
     <link rel="stylesheet" href="style.css">
     
-    <script src="vocab_base.js"></script>      <script src="vocab_sentences.js"></script> </head>
+    <script src="vocab_base.js"></script>      
+    <script src="vocab_sentences.js"></script> 
+</head>
 <body>
     <canvas id="confetti-canvas"></canvas>
 
@@ -178,6 +180,19 @@
                 <button class="close-btn" onclick="closeRanking()" style="background:none;border:none;color:white;font-size:1.5rem;cursor:pointer;">&times;</button>
             </div>
             <div class="word-list" id="ranking-body"></div>
+        </div>
+    </div>
+
+    <div class="modal" id="confirm-modal" style="z-index: 2000;">
+        <div class="modal-content" style="max-width: 400px; text-align: center; border: 1px solid var(--danger);">
+            <div style="font-size: 3rem; margin-bottom: 10px;">⚠️</div>
+            <h3 id="confirm-title" style="color: var(--danger); margin: 0 0 10px 0;">Weet je het zeker?</h3>
+            <p id="confirm-text" style="color: #ccc; margin-bottom: 25px; line-height: 1.5;">...</p>
+            
+            <div style="display: flex; gap: 10px; justify-content: center;">
+                <button id="btn-confirm-no" class="btn" style="background: #333; color: white; border: 1px solid #555; width: 100px;">Nee</button>
+                <button id="btn-confirm-yes" class="btn-danger-action" style="width: 100px;">JA</button>
+            </div>
         </div>
     </div>
 

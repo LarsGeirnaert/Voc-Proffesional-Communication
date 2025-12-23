@@ -4,8 +4,7 @@ let progressMap = JSON.parse(localStorage.getItem('vocab_progress_v2')) || {};
 let starredMap = JSON.parse(localStorage.getItem('vocab_starred')) || {};
 let wordStats = JSON.parse(localStorage.getItem('vocab_stats')) || {};
 
-// NIEUWE DATA VOOR STATISTIEKEN
-// bottomHistory bevat woorden die ooit in de range 200-220 (de bodem) stonden.
+// DATA VOOR STATISTIEKEN
 let bottomHistory = JSON.parse(localStorage.getItem('vocab_bottom_history')) || []; 
 let confusionMap = JSON.parse(localStorage.getItem('vocab_confusions')) || {}; 
 
@@ -50,7 +49,7 @@ window.onload = function() {
 
         fixRenamedWords(); 
         populateUnitDropdown();
-        refreshStats(); // Hierin checken we nu ook de rankings!
+        refreshStats(); 
         toggleSettingsUI();
     } else {
         document.getElementById('definition-area').innerText = "ERROR: vocab_base.js of vocab_sentences.js ontbreekt!";
@@ -59,7 +58,6 @@ window.onload = function() {
 };
 
 // --- HULPFUNCTIE: BEREKEN GLOBALE RANKING ---
-// Geeft een gesorteerde lijst terug van ALLE 220 woorden
 function getGlobalRankings() {
     let list = activeDB.map(item => {
         const s = wordStats[item.w] || { c: 0, t: 0 };
@@ -67,19 +65,11 @@ function getGlobalRankings() {
         return { w: item.w, pct: pct, c: s.c, t: s.t, id: item.id };
     });
 
-    // Sorteer logica (Beste bovenaan, Slechtste onderaan)
     list.sort((a, b) => {
-        // 1. Minste pogingen met 0% score onderaan
         if (a.t === 0 && b.t > 0) return 1; 
         if (b.t === 0 && a.t > 0) return -1;
-        
-        // 2. Percentage (Hoog naar laag)
         if (Math.abs(b.pct - a.pct) > 0.1) return b.pct - a.pct;
-        
-        // 3. Bij gelijk percentage: Meeste correcte antwoorden wint
         if (b.c !== a.c) return b.c - a.c;
-
-        // 4. Bij alles gelijk: Alfabetisch (voor stabiliteit)
         return a.w.localeCompare(b.w);
     });
 
@@ -87,19 +77,14 @@ function getGlobalRankings() {
 }
 
 // --- UPDATE BOTTOM HISTORY ---
-// Checkt wie er nu in de gevarenzone (200-220) zit en slaat dit op
 function checkBottomRankings() {
     const ranking = getGlobalRankings();
     const totalWords = ranking.length;
     
-    // We kijken naar de laatste 20 (of minder als de DB kleiner is)
-    // Range: Index [Length-21] tot [Length-1]
-    const startIndex = Math.max(0, totalWords - 21); // Top 200 t/m 220 (ongeveer)
+    const startIndex = Math.max(0, totalWords - 21);
     
-    // Loop door de onderste regionen
     for (let i = startIndex; i < totalWords; i++) {
         const wordObj = ranking[i];
-        // Als het woord nog niet in de historie staat, voeg toe
         if (!bottomHistory.includes(wordObj.w)) {
             bottomHistory.push(wordObj.w);
         }
@@ -144,8 +129,6 @@ function updateStats(word, isCorrect) {
     wordStats[word].t++; 
     if (isCorrect) wordStats[word].c++; 
     localStorage.setItem('vocab_stats', JSON.stringify(wordStats));
-    
-    // Check na elke update of de ranglijst verschoven is
     checkBottomRankings();
 }
 
@@ -157,37 +140,99 @@ function registerConfusion(targetWord, wrongWord) {
     localStorage.setItem('vocab_confusions', JSON.stringify(confusionMap));
 }
 
-// --- RESET ---
+// --- BAD HISTORY TRACKER (HELPER VOOR CONNECT) ---
+// Let op: we gebruiken 'bottomHistory' voor de stats, maar dit is handig voor 'Slecht' logica
+function markAsBad(word) {
+    // We markeren het gewoon in progressie
+    progressMap[word] = -1;
+    starredMap[word] = true;
+}
+
+// --- RESET FUNCTIES (VERVANGEN DOOR CUSTOM CONFIRM) ---
+
 function resetStarredToNew() {
     const starredKeys = Object.keys(starredMap);
-    if (starredKeys.length === 0) { alert("Geen sterren."); return; }
-    if(confirm(`Reset progressie van ${starredKeys.length} gemarkeerde woorden?`)) {
-        starredKeys.forEach(word => { progressMap[word] = 0; });
-        saveProgress();
-        alert("Reset voltooid.");
+    if (starredKeys.length === 0) { 
+        showCustomConfirm("Je hebt nog geen woorden gemarkeerd met een ster.", null, null, "Geen Sterren");
+        return; 
     }
-}
-function unstarAll() {
-    if(confirm("Alle sterren verwijderen?")) {
-        starredMap = {}; localStorage.setItem('vocab_starred', JSON.stringify(starredMap));
-        refreshStats();
-        alert("Alle sterren zijn verwijderd.");
-    }
-}
-function resetProgress() {
-    if (!confirm("⚠️ WEET JE HET ZEKER?\n\nDit zal al je voortgang (groen/rood gemarkeerde woorden) wissen.")) return;
-    let wisKlassement = confirm("Wil je ook het KLASSEMENT (statistieken) wissen?\n\n✅ Klik OK om ALLES te wissen.\n❌ Klik ANNULEREN om je ranglijst te BEWAREN.");
     
+    showCustomConfirm(
+        `Dit zal de voortgang van ${starredKeys.length} gemarkeerde woorden resetten naar 'Nieuw'.`,
+        function() {
+            starredKeys.forEach(word => { progressMap[word] = 0; });
+            saveProgress();
+            setTimeout(() => alert("Reset voltooid!"), 100); 
+        }
+    );
+}
+
+function unstarAll() {
+    showCustomConfirm(
+        "Wil je alle sterren verwijderen? Je voortgang blijft wel behouden.",
+        function() {
+            starredMap = {}; 
+            localStorage.setItem('vocab_starred', JSON.stringify(starredMap));
+            refreshStats();
+        }
+    );
+}
+
+function resetSpecificUnit() {
+    const u = prompt("Welke Unit wil je resetten? (Vul nummer in)"); 
+    if(!u) return; 
+    const tu = parseInt(u);
+    
+    if(![...new Set(activeDB.map(i=>i.u))].includes(tu)) { 
+        alert("Unit bestaat niet"); 
+        return; 
+    }
+
+    showCustomConfirm(
+        `Weet je zeker dat je ALLE progressie van Unit ${tu} wilt wissen?`,
+        function() {
+            activeDB.forEach(i => {
+                if(i.u === tu) progressMap[i.w] = 0;
+            });
+            saveProgress();
+        }
+    );
+}
+
+function resetProgress() {
+    showCustomConfirm(
+        "Dit zal AL je voortgang (groen/rood gemarkeerde woorden) wissen. Dit kan niet ongedaan worden gemaakt.",
+        function() {
+            // EERSTE JA: VRAAG OM STATS
+            showCustomConfirm(
+                "Wil je ook het KLASSEMENT (je scores en grafieken) wissen?\n\nJA = Alles wissen\nNEE = Alleen voortgang wissen, klassement bewaren",
+                function() {
+                    performFullReset(true);
+                },
+                function() {
+                    performFullReset(false);
+                },
+                "Ook statistieken wissen?"
+            );
+        },
+        null, 
+        "⚠ WEET JE HET ZEKER?"
+    );
+}
+
+function performFullReset(wisOokStats) {
     localStorage.removeItem('vocab_progress_v2');
     localStorage.removeItem('vocab_starred');
-    localStorage.removeItem('vocab_bottom_history'); // De nieuwe ranking historie
+    localStorage.removeItem('vocab_bottom_history');
     localStorage.removeItem('vocab_confusions'); 
-    localStorage.removeItem('vocab_word_trends');    // Mocht je die toch hebben toegevoegd
+    localStorage.removeItem('vocab_word_trends');
     
-    // OPRUIMEN OUDE DATA
-    localStorage.removeItem('vocab_bad_history');    // <--- DEZE MAG WEG!
+    localStorage.removeItem('vocab_bad_history'); // Oude data opruimen
     
-    if (wisKlassement) localStorage.removeItem('vocab_stats');
+    if (wisOokStats) {
+        localStorage.removeItem('vocab_stats');
+    }
+    
     location.reload();
 }
 
@@ -427,7 +472,6 @@ function nextConnectRound() {
     const selectedUnit = document.getElementById('unit-select').value;
     const starOnly = document.getElementById('star-only-check').checked;
     
-    // 1. Filter de volledige pool
     let fullPool = activeDB.filter(item => {
         const unitMatch = (selectedUnit === 'all' || item.u.toString() === selectedUnit);
         const starMatch = !starOnly || starredMap[item.w];
@@ -440,7 +484,6 @@ function nextConnectRound() {
         return;
     }
 
-    // 2. Filter woorden van de vorige ronde eruit (tenzij de pool te klein is)
     let candidates = [];
     if (fullPool.length <= 7) {
         candidates = fullPool;
@@ -448,50 +491,33 @@ function nextConnectRound() {
         candidates = fullPool.filter(item => !connectLastRoundIds.includes(item.w));
     }
 
-    // 3. Eerst random husselen
     candidates.sort(() => Math.random() - 0.5);
 
-    // ---------------------------------------------------------
-    // 4. DE SLIMME TRUC: ZOEK EEN "NEMESIS" (Verwarringspartner)
-    // ---------------------------------------------------------
-    
-    // We nemen het eerste woord in de random lijst als "Anker"
+    // --- SLIMME MATCHING ---
     let anchorWord = candidates[0];
     let nemesis = null;
 
-    // Check of dit woord vaak verward wordt (staat in confusionMap)
     if (confusionMap[anchorWord.w]) {
-        // Sorteer de fouten op frequentie (hoogste bovenaan)
         let mistakes = Object.keys(confusionMap[anchorWord.w]).sort((a, b) => {
             return confusionMap[anchorWord.w][b] - confusionMap[anchorWord.w][a];
         });
 
-        // Zoek of een van deze 'foute partners' beschikbaar is in de huidige kandidatenlijst
         for (let mistakeWord of mistakes) {
             let found = candidates.find(item => item.w === mistakeWord);
             if (found) {
                 nemesis = found;
-                break; // We hebben de ergste vijand gevonden die beschikbaar is
+                break; 
             }
         }
     }
 
-    // Als we een nemesis hebben gevonden, zorgen we dat die OOK in de top 4 komt
     if (nemesis) {
-        // Haal de nemesis weg uit zijn huidige (willekeurige) positie
         candidates = candidates.filter(item => item !== nemesis);
-        // En zet hem op plek 2 (index 1), direct na het anker
         candidates.splice(1, 0, nemesis);
-        
-        // (Optioneel: console log om te checken of het werkt)
-        // console.log(`Smart match! Placing '${anchorWord.w}' with nemesis '${nemesis.w}'`);
     }
-    // ---------------------------------------------------------
+    // -----------------------
 
-    // 5. Pak de top 4 (Nu zit het anker + eventueel de nemesis erin)
     connectActiveItems = candidates.slice(0, 4);
-    
-    // Sla op voor de volgende ronde (zodat we ze niet direct weer zien)
     connectLastRoundIds = connectActiveItems.map(i => i.w);
 
     connectMatchesFound = 0;
@@ -596,12 +622,10 @@ function handleConnectClick(el, id, type) {
         el.classList.add('wrong');
         connectSelection.el.classList.add('wrong');
         
-        // FOUT BIJ CONNECT -> UPDATE STATS + CONFUSION + MARK AS BAD
         updateStats(connectSelection.id, false);
         markAsBad(connectSelection.id);
         
-        // --- DE FIX: REGISTREER DEZE FOUT SLECHTS 1 KEER ---
-        // (De weergave telt zelf A->B en B->A bij elkaar op, dus 1x opslaan is genoeg)
+        // FIX: REGISTREER DEZE FOUT SLECHTS 1 KEER
         registerConfusion(connectSelection.id, id);
 
         saveProgress();
@@ -798,11 +822,9 @@ document.getElementById('answer-input').addEventListener('input', (e) => {
             registerConfusion(currentItem.w, mistakeItem.w);
             
             updateStats(mistakeItem.w, false); 
-            progressMap[mistakeItem.w] = -1; 
-            starredMap[mistakeItem.w] = true;
+            markAsBad(mistakeItem.w); 
             
-            progressMap[currentItem.w] = -1;
-            starredMap[currentItem.w] = true;
+            markAsBad(currentItem.w); 
 
             if (currentMode !== 'worst25' && !activeQueue.some(i => i.w === mistakeItem.w)) {
                 activeQueue.push(mistakeItem);
@@ -827,8 +849,7 @@ function passWord(skipVisuals = false, isConfusion = false) {
     }
 
     updateStats(currentItem.w, false);
-    progressMap[currentItem.w] = -1; 
-    starredMap[currentItem.w] = true;
+    markAsBad(currentItem.w);
 
     if (currentMode === 'worst25') {
         sessionWrong++;
@@ -990,7 +1011,6 @@ function refreshStats() {
     document.getElementById('mastery-pct').innerText = pct + "%";
     document.getElementById('progress-label-text').innerText = (selectedUnit!=='all'?`UNIT ${selectedUnit}`:"TOTAAL") + (sOnly?" (★)":"");
     
-    // Check de rankings bij laden en bij refresh
     checkBottomRankings();
 }
 
@@ -1029,11 +1049,6 @@ function populateUnitDropdown() {
 }
 
 function saveUnitSelection() { localStorage.setItem('vocab_last_unit', document.getElementById('unit-select').value); }
-function resetSpecificUnit() {
-    const u = prompt("Unit resetten?"); if(!u) return; const tu = parseInt(u);
-    if(![...new Set(activeDB.map(i=>i.u))].includes(tu)) { alert("Unit bestaat niet"); return; }
-    if(confirm(`Unit ${tu} resetten?`)) { activeDB.forEach(i=>{if(i.u===tu)progressMap[i.w]=0}); saveProgress(); alert("Gereset"); }
-}
 
 function stopGame() { 
     isPlaying = false; clearInterval(gameInterval); 
@@ -1134,7 +1149,14 @@ function toggleStar(w) {
 }
 
 function closeModal() { document.getElementById('list-modal').style.display='none'; currentListType = null; }
-window.onclick = e => { if(e.target == document.getElementById('list-modal')) closeModal(); if(e.target == document.getElementById('ranking-modal')) closeRanking(); }
+window.onclick = e => { 
+    if(e.target == document.getElementById('list-modal')) closeModal(); 
+    if(e.target == document.getElementById('ranking-modal')) closeRanking(); 
+    // Voeg de check voor confirm modal toe
+    if(e.target == document.getElementById('confirm-modal')) {
+        document.getElementById('confirm-modal').style.display = 'none';
+    }
+}
 function saveProgress() { 
     localStorage.setItem('vocab_progress_v2', JSON.stringify(progressMap)); 
     localStorage.setItem('vocab_starred', JSON.stringify(starredMap)); 
@@ -1234,12 +1256,10 @@ function showRanking() {
     
     if (confusionList.length > 0) {
         const confDiv = document.createElement('div');
-        // Extra marge onderaan zodat het niet vastplakt aan de hoofdtabel
         confDiv.style.marginBottom = "30px"; 
         
         let confRows = "";
         confusionList.slice(0, 10).forEach(c => {
-            // We gebruiken padding en uitlijning (right vs left) om ze mooi naar elkaar toe te laten wijzen
             confRows += `
             <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
                 <td style="text-align:right; color:var(--text-main); padding-right:10px; width:45%;">${c.w1}</td>
@@ -1279,7 +1299,7 @@ function showRanking() {
         b.appendChild(confDiv);
     }
 
-    // SECTIE 4: NORMALE LIJST (TITEL TOEGEVOEGD VOOR DUIDELIJKHEID)
+    // SECTIE 4: NORMALE LIJST
     const listTitle = document.createElement('h3');
     listTitle.innerText = "Alle Woorden & Scores";
     listTitle.style.cssText = "color:var(--text-main); font-size:1rem; margin-bottom:10px; padding-bottom:5px; border-bottom:1px solid #444;";
@@ -1327,3 +1347,26 @@ function getScoreColor(pct) {
 }
 
 function closeRanking() { document.getElementById('ranking-modal').style.display = 'none'; }
+
+// --- CUSTOM CONFIRM MODAL LOGICA ---
+let confirmCallbackYes = null;
+let confirmCallbackNo = null;
+
+function showCustomConfirm(text, onYes, onNo = null, title = "Weet je het zeker?") {
+    document.getElementById('confirm-title').innerText = title;
+    document.getElementById('confirm-text').innerText = text;
+    confirmCallbackYes = onYes;
+    confirmCallbackNo = onNo;
+    document.getElementById('confirm-modal').style.display = 'flex';
+}
+
+// Koppel de knoppen (gebeurt eenmalig)
+document.getElementById('btn-confirm-yes').onclick = function() {
+    document.getElementById('confirm-modal').style.display = 'none';
+    if (confirmCallbackYes) confirmCallbackYes(); 
+};
+
+document.getElementById('btn-confirm-no').onclick = function() {
+    document.getElementById('confirm-modal').style.display = 'none';
+    if (confirmCallbackNo) confirmCallbackNo(); 
+};
