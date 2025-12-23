@@ -167,7 +167,7 @@ const vocabDatabase = [
     // 78
     {id: 78, w: "web-enabled", d: "Designed or able to be used on the internet", u: 9},
     // 79
-    {id: 79, w: "information superhighway", d: "The internet and other systems that allow people to share information electronically", u: 9},
+    {id: 79, w: "information superhighway", d: "A global digital network capable of high-speed data transfer", u: 9},
     // 80
     {id: 80, w: "cybersquatting", d: "Purchasing a domain which is identical to other trademarks/brands and holding it for resale", u: 9},
     

@@ -4,6 +4,11 @@ let progressMap = JSON.parse(localStorage.getItem('vocab_progress_v2')) || {};
 let starredMap = JSON.parse(localStorage.getItem('vocab_starred')) || {};
 let wordStats = JSON.parse(localStorage.getItem('vocab_stats')) || {};
 
+// NIEUWE DATA VOOR STATISTIEKEN
+// bottomHistory bevat woorden die ooit in de range 200-220 (de bodem) stonden.
+let bottomHistory = JSON.parse(localStorage.getItem('vocab_bottom_history')) || []; 
+let confusionMap = JSON.parse(localStorage.getItem('vocab_confusions')) || {}; 
+
 let activeQueue = [];
 let currentItem = null;
 let score = 0;
@@ -23,7 +28,7 @@ let sessionWrongItems = [];
 let connectSelection = null; 
 let connectMatchesFound = 0;
 let connectActiveItems = []; 
-let connectLastRoundIds = []; // NIEUW: Houdt bij wat we net gehad hebben
+let connectLastRoundIds = []; 
 
 const START_TIME = 25.0;
 const VISUAL_MAX_TIME = 60.0;
@@ -35,7 +40,6 @@ let gameInterval; let isPlaying = false;
 
 // AUTOMATISCHE START
 window.onload = function() {
-    // Check of beide bestanden geladen zijn en merge ze
     if (typeof vocabDatabase !== 'undefined' && typeof vocabSentences !== 'undefined') {
         activeDB = vocabDatabase.map(item => {
             return {
@@ -46,13 +50,62 @@ window.onload = function() {
 
         fixRenamedWords(); 
         populateUnitDropdown();
-        refreshStats();
+        refreshStats(); // Hierin checken we nu ook de rankings!
         toggleSettingsUI();
     } else {
         document.getElementById('definition-area').innerText = "ERROR: vocab_base.js of vocab_sentences.js ontbreekt!";
         document.getElementById('definition-area').style.color = "var(--danger)";
     }
 };
+
+// --- HULPFUNCTIE: BEREKEN GLOBALE RANKING ---
+// Geeft een gesorteerde lijst terug van ALLE 220 woorden
+function getGlobalRankings() {
+    let list = activeDB.map(item => {
+        const s = wordStats[item.w] || { c: 0, t: 0 };
+        const pct = s.t > 0 ? (s.c / s.t) * 100 : 0;
+        return { w: item.w, pct: pct, c: s.c, t: s.t, id: item.id };
+    });
+
+    // Sorteer logica (Beste bovenaan, Slechtste onderaan)
+    list.sort((a, b) => {
+        // 1. Minste pogingen met 0% score onderaan
+        if (a.t === 0 && b.t > 0) return 1; 
+        if (b.t === 0 && a.t > 0) return -1;
+        
+        // 2. Percentage (Hoog naar laag)
+        if (Math.abs(b.pct - a.pct) > 0.1) return b.pct - a.pct;
+        
+        // 3. Bij gelijk percentage: Meeste correcte antwoorden wint
+        if (b.c !== a.c) return b.c - a.c;
+
+        // 4. Bij alles gelijk: Alfabetisch (voor stabiliteit)
+        return a.w.localeCompare(b.w);
+    });
+
+    return list;
+}
+
+// --- UPDATE BOTTOM HISTORY ---
+// Checkt wie er nu in de gevarenzone (200-220) zit en slaat dit op
+function checkBottomRankings() {
+    const ranking = getGlobalRankings();
+    const totalWords = ranking.length;
+    
+    // We kijken naar de laatste 20 (of minder als de DB kleiner is)
+    // Range: Index [Length-21] tot [Length-1]
+    const startIndex = Math.max(0, totalWords - 21); // Top 200 t/m 220 (ongeveer)
+    
+    // Loop door de onderste regionen
+    for (let i = startIndex; i < totalWords; i++) {
+        const wordObj = ranking[i];
+        // Als het woord nog niet in de historie staat, voeg toe
+        if (!bottomHistory.includes(wordObj.w)) {
+            bottomHistory.push(wordObj.w);
+        }
+    }
+    localStorage.setItem('vocab_bottom_history', JSON.stringify(bottomHistory));
+}
 
 // --- DATA MIGREREN ---
 function fixRenamedWords() {
@@ -85,12 +138,23 @@ function fixRenamedWords() {
     if (changed) console.log("Woordnamen bijgewerkt.");
 }
 
-// --- STATISTIEKEN ---
+// --- STATISTIEKEN UPDATEN ---
 function updateStats(word, isCorrect) {
     if (!wordStats[word]) wordStats[word] = { c: 0, t: 0 };
     wordStats[word].t++; 
     if (isCorrect) wordStats[word].c++; 
     localStorage.setItem('vocab_stats', JSON.stringify(wordStats));
+    
+    // Check na elke update of de ranglijst verschoven is
+    checkBottomRankings();
+}
+
+// CONFUSION TRACKING
+function registerConfusion(targetWord, wrongWord) {
+    if (!confusionMap[targetWord]) confusionMap[targetWord] = {};
+    if (!confusionMap[targetWord][wrongWord]) confusionMap[targetWord][wrongWord] = 0;
+    confusionMap[targetWord][wrongWord]++;
+    localStorage.setItem('vocab_confusions', JSON.stringify(confusionMap));
 }
 
 // --- RESET ---
@@ -113,8 +177,16 @@ function unstarAll() {
 function resetProgress() {
     if (!confirm("⚠️ WEET JE HET ZEKER?\n\nDit zal al je voortgang (groen/rood gemarkeerde woorden) wissen.")) return;
     let wisKlassement = confirm("Wil je ook het KLASSEMENT (statistieken) wissen?\n\n✅ Klik OK om ALLES te wissen.\n❌ Klik ANNULEREN om je ranglijst te BEWAREN.");
+    
     localStorage.removeItem('vocab_progress_v2');
     localStorage.removeItem('vocab_starred');
+    localStorage.removeItem('vocab_bottom_history'); // De nieuwe ranking historie
+    localStorage.removeItem('vocab_confusions'); 
+    localStorage.removeItem('vocab_word_trends');    // Mocht je die toch hebben toegevoegd
+    
+    // OPRUIMEN OUDE DATA
+    localStorage.removeItem('vocab_bad_history');    // <--- DEZE MAG WEG!
+    
     if (wisKlassement) localStorage.removeItem('vocab_stats');
     location.reload();
 }
@@ -134,7 +206,6 @@ function toggleSettingsUI() {
     const unitSelect = document.getElementById('unit-select');
     const starLabel = document.getElementById('star-only-label');
 
-    // Reset visibility
     unitSelect.style.display = 'block';
     if(starLabel) starLabel.style.display = 'flex';
     timerLabel.style.display = 'flex';
@@ -233,7 +304,6 @@ function updateSessionUI() {
 function startGame() {
     currentMode = document.getElementById('mode-select').value;
     
-    // UI RESET
     document.getElementById('definition-area').style.display = 'flex';
     document.getElementById('connect-area').style.display = 'none';
     document.getElementById('input-area').style.display = 'none';
@@ -266,10 +336,8 @@ function startGame() {
         nextWord();
 
     } else if (currentMode === 'connect' || currentMode === 'fillblanks') {
-        // RESET LAST ROUND TRACKER BIJ START
         connectLastRoundIds = [];
         
-        // CHECK OF ER WOORDEN ZIJN IN DE SELECTIE
         const selectedUnit = document.getElementById('unit-select').value;
         const starOnly = document.getElementById('star-only-check').checked;
         const potentialPool = activeDB.filter(item => {
@@ -354,12 +422,12 @@ function startGame() {
     }
 }
 
-// --- CONNECT & FILLBLANKS LOGIC (NIEUWE LOGICA) ---
+// --- CONNECT & FILLBLANKS LOGIC ---
 function nextConnectRound() {
-    // 1. BEPAAL DE 'FULL POOL' (Alle woorden die aan de filters voldoen)
     const selectedUnit = document.getElementById('unit-select').value;
     const starOnly = document.getElementById('star-only-check').checked;
     
+    // 1. Filter de volledige pool
     let fullPool = activeDB.filter(item => {
         const unitMatch = (selectedUnit === 'all' || item.u.toString() === selectedUnit);
         const starMatch = !starOnly || starredMap[item.w];
@@ -367,29 +435,63 @@ function nextConnectRound() {
     });
 
     if (fullPool.length < 4) {
-        alert("Te weinig woorden voor een nieuwe ronde.");
+        alert("Te weinig woorden voor een nieuwe ronde (minimaal 4 nodig).");
         stopGame();
         return;
     }
 
-    // 2. KIES KANDIDATEN
+    // 2. Filter woorden van de vorige ronde eruit (tenzij de pool te klein is)
     let candidates = [];
-
     if (fullPool.length <= 7) {
-        // Groep is te klein om "vorige" uit te sluiten, dus pak gewoon alles
         candidates = fullPool;
     } else {
-        // Groep is groot genoeg: Filter de woorden van de VORIGE ronde eruit
         candidates = fullPool.filter(item => !connectLastRoundIds.includes(item.w));
     }
 
-    // 3. KIES 4 RANDOM ITEMS UIT KANDIDATEN
-    // Shuffle
+    // 3. Eerst random husselen
     candidates.sort(() => Math.random() - 0.5);
-    // Pak de eerste 4
-    connectActiveItems = candidates.slice(0, 4);
 
-    // 4. SLA DEZE OP ALS 'VORIGE RONDE' VOOR DE VOLGENDE KEER
+    // ---------------------------------------------------------
+    // 4. DE SLIMME TRUC: ZOEK EEN "NEMESIS" (Verwarringspartner)
+    // ---------------------------------------------------------
+    
+    // We nemen het eerste woord in de random lijst als "Anker"
+    let anchorWord = candidates[0];
+    let nemesis = null;
+
+    // Check of dit woord vaak verward wordt (staat in confusionMap)
+    if (confusionMap[anchorWord.w]) {
+        // Sorteer de fouten op frequentie (hoogste bovenaan)
+        let mistakes = Object.keys(confusionMap[anchorWord.w]).sort((a, b) => {
+            return confusionMap[anchorWord.w][b] - confusionMap[anchorWord.w][a];
+        });
+
+        // Zoek of een van deze 'foute partners' beschikbaar is in de huidige kandidatenlijst
+        for (let mistakeWord of mistakes) {
+            let found = candidates.find(item => item.w === mistakeWord);
+            if (found) {
+                nemesis = found;
+                break; // We hebben de ergste vijand gevonden die beschikbaar is
+            }
+        }
+    }
+
+    // Als we een nemesis hebben gevonden, zorgen we dat die OOK in de top 4 komt
+    if (nemesis) {
+        // Haal de nemesis weg uit zijn huidige (willekeurige) positie
+        candidates = candidates.filter(item => item !== nemesis);
+        // En zet hem op plek 2 (index 1), direct na het anker
+        candidates.splice(1, 0, nemesis);
+        
+        // (Optioneel: console log om te checken of het werkt)
+        // console.log(`Smart match! Placing '${anchorWord.w}' with nemesis '${nemesis.w}'`);
+    }
+    // ---------------------------------------------------------
+
+    // 5. Pak de top 4 (Nu zit het anker + eventueel de nemesis erin)
+    connectActiveItems = candidates.slice(0, 4);
+    
+    // Sla op voor de volgende ronde (zodat we ze niet direct weer zien)
     connectLastRoundIds = connectActiveItems.map(i => i.w);
 
     connectMatchesFound = 0;
@@ -422,20 +524,14 @@ function renderConnectBoard() {
         if (currentMode === 'fillblanks') {
             let sentences = item.s;
             let s = "";
-
             if (Array.isArray(sentences)) {
-                // KIES RANDOM ZIN
                 s = sentences[Math.floor(Math.random() * sentences.length)];
             } else {
                 s = sentences || item.d;
             }
-
             if(s) {
-                // VERVANG HET WOORD (Slimme check met 'to')
                 let searchWord = item.w;
-                if (searchWord.toLowerCase().startsWith("to ")) {
-                    searchWord = searchWord.substring(3); 
-                }
+                if (searchWord.toLowerCase().startsWith("to ")) searchWord = searchWord.substring(3); 
                 const regex = new RegExp(searchWord, 'gi');
                 s = s.replace(regex, '_______');
             }
@@ -500,9 +596,14 @@ function handleConnectClick(el, id, type) {
         el.classList.add('wrong');
         connectSelection.el.classList.add('wrong');
         
-        updateStats(connectSelection.id, false); 
-        progressMap[connectSelection.id] = -1;
-        starredMap[connectSelection.id] = true;
+        // FOUT BIJ CONNECT -> UPDATE STATS + CONFUSION + MARK AS BAD
+        updateStats(connectSelection.id, false);
+        markAsBad(connectSelection.id);
+        
+        // --- DE FIX: REGISTREER DEZE FOUT SLECHTS 1 KEER ---
+        // (De weergave telt zelf A->B en B->A bij elkaar op, dus 1x opslaan is genoeg)
+        registerConfusion(connectSelection.id, id);
+
         saveProgress();
 
         let t1 = el;
@@ -653,10 +754,25 @@ function renderGameUI() {
                 <div class="fc-face fc-back">${currentItem.w}</div>
             </div>`;
     } else {
-        // OVERDRIVE / WORST25 (Toon definitie)
+        let textToShow = currentItem.d;
+        if(currentMode === 'fillblanks') {
+             let sentences = currentItem.s;
+             if (Array.isArray(sentences)) {
+                textToShow = sentences[Math.floor(Math.random() * sentences.length)];
+             } else {
+                textToShow = sentences || currentItem.d;
+             }
+             if(textToShow !== currentItem.d) {
+                 let searchWord = currentItem.w;
+                 if (searchWord.toLowerCase().startsWith("to ")) searchWord = searchWord.substring(3);
+                 const regex = new RegExp(searchWord, 'gi');
+                 textToShow = textToShow.replace(regex, '__________');
+             }
+        }
+
         contentHtml = `
             ${starHtml}
-            <div style="margin-top:10px;">${currentItem.d}</div>
+            <div style="${currentMode === 'fillblanks' ? 'font-size:1.3rem; font-style:italic; line-height:1.5;' : 'margin-top:10px;'}">${textToShow}</div>
         `;
         document.getElementById('answer-input').value = "";
     }
@@ -670,7 +786,7 @@ function renderGameUI() {
 
 // --- INPUT HANDLING ---
 document.getElementById('answer-input').addEventListener('input', (e) => {
-    if (!isPlaying || currentMode === 'flashcards' || currentMode === 'connect' || currentMode === 'fillblanks') return;
+    if (!isPlaying || currentMode === 'flashcards' || currentMode === 'connect') return;
     const val = e.target.value.trim().toLowerCase();
     const correct = currentItem.w.toLowerCase();
 
@@ -679,9 +795,15 @@ document.getElementById('answer-input').addEventListener('input', (e) => {
     const mistakeItem = activeDB.find(item => item.w.toLowerCase() === val);
     if (mistakeItem) {
         if (!correct.startsWith(val)) {
+            registerConfusion(currentItem.w, mistakeItem.w);
+            
             updateStats(mistakeItem.w, false); 
-            progressMap[mistakeItem.w] = -1;
+            progressMap[mistakeItem.w] = -1; 
             starredMap[mistakeItem.w] = true;
+            
+            progressMap[currentItem.w] = -1;
+            starredMap[currentItem.w] = true;
+
             if (currentMode !== 'worst25' && !activeQueue.some(i => i.w === mistakeItem.w)) {
                 activeQueue.push(mistakeItem);
             }
@@ -867,6 +989,9 @@ function refreshStats() {
     document.getElementById('mastery-bar').style.width = pct + "%"; 
     document.getElementById('mastery-pct').innerText = pct + "%";
     document.getElementById('progress-label-text').innerText = (selectedUnit!=='all'?`UNIT ${selectedUnit}`:"TOTAAL") + (sOnly?" (★)":"");
+    
+    // Check de rankings bij laden en bij refresh
+    checkBottomRankings();
 }
 
 function populateUnitDropdown() {
@@ -940,7 +1065,16 @@ function fireConfetti() {
     function a(){x.clearRect(0,0,c.width,c.height); p.forEach(i=>{i.x+=i.vx;i.y+=i.vy;i.vy+=0.1;x.fillStyle=i.c;x.fillRect(i.x,i.y,5,5)}); if(p.some(i=>i.y<c.height)) requestAnimationFrame(a);} a();
 }
 
-function exportData() { const d = {p:progressMap,s:starredMap, st:wordStats}; const b = new Blob([JSON.stringify(d)],{type:"application/json"}); const u=URL.createObjectURL(b); const a=document.createElement('a'); a.href=u; a.download="vocab_backup.json"; a.click(); }
+function exportData() { 
+    const d = {
+        p: progressMap, 
+        s: starredMap, 
+        st: wordStats,
+        bh: bottomHistory,
+        cm: confusionMap
+    }; 
+    const b = new Blob([JSON.stringify(d)],{type:"application/json"}); const u=URL.createObjectURL(b); const a=document.createElement('a'); a.href=u; a.download="vocab_backup.json"; a.click(); 
+}
 
 function importData(input) {
     const file = input.files[0]; if (!file) return;
@@ -950,9 +1084,15 @@ function importData(input) {
             const data = JSON.parse(e.target.result);
             if (data.p) progressMap = data.p; 
             if (data.s) starredMap = data.s;
-            if (data.st) wordStats = data.st; 
+            if (data.st) wordStats = data.st;
+            if (data.bh) bottomHistory = data.bh; 
+            if (data.cm) confusionMap = data.cm; 
             else if (data.progress) { progressMap = data.progress; starredMap = data.starred; } 
-            saveProgress(); localStorage.setItem('vocab_stats', JSON.stringify(wordStats)); alert("Backup geladen!"); location.reload();
+            saveProgress(); 
+            localStorage.setItem('vocab_stats', JSON.stringify(wordStats)); 
+            localStorage.setItem('vocab_bottom_history', JSON.stringify(bottomHistory));
+            localStorage.setItem('vocab_confusions', JSON.stringify(confusionMap));
+            alert("Backup geladen!"); location.reload();
         } catch (err) { alert("Fout bij lezen bestand."); }
     }; reader.readAsText(file);
     input.value = '';
@@ -995,7 +1135,11 @@ function toggleStar(w) {
 
 function closeModal() { document.getElementById('list-modal').style.display='none'; currentListType = null; }
 window.onclick = e => { if(e.target == document.getElementById('list-modal')) closeModal(); if(e.target == document.getElementById('ranking-modal')) closeRanking(); }
-function saveProgress() { localStorage.setItem('vocab_progress_v2', JSON.stringify(progressMap)); localStorage.setItem('vocab_starred', JSON.stringify(starredMap)); refreshStats(); populateUnitDropdown(); }
+function saveProgress() { 
+    localStorage.setItem('vocab_progress_v2', JSON.stringify(progressMap)); 
+    localStorage.setItem('vocab_starred', JSON.stringify(starredMap)); 
+    refreshStats(); populateUnitDropdown(); 
+}
 
 function showRanking() {
     const m = document.getElementById('ranking-modal');
@@ -1005,14 +1149,11 @@ function showRanking() {
     if (!activeDB) return;
 
     let selectedUnit = document.getElementById('unit-select').value;
-    const mode = document.getElementById('mode-select').value; // <--- HUIDIGE MODE OPHALEN
+    const mode = document.getElementById('mode-select').value;
 
-    // --- DE FIX ---
-    // Als we in "Persoonlijk Traject" zitten, negeer de unit-keuze en toon ALLES.
     if (mode === 'worst25') {
         selectedUnit = 'all';
     }
-    // ----------------
 
     const scopeWords = activeDB.filter(item => selectedUnit === 'all' || item.u.toString() === selectedUnit);
 
@@ -1032,26 +1173,120 @@ function showRanking() {
     let totalCorrect = 0; let totalAttempts = 0;
     list.forEach(i => { totalCorrect += i.c; totalAttempts += i.t; });
 
-    if (list.length > 0) {
-        // Pas de titel aan als het Persoonlijk Traject is, zodat het duidelijk is
-        let titleText = (mode === 'worst25' || selectedUnit === 'all') ? "Totaal Score (Alles)" : "Totaal Score (Deze Unit)";
+    let titleText = (mode === 'worst25' || selectedUnit === 'all') ? "Totaal Score (Alles)" : "Totaal Score (Deze Unit)";
 
-        const summary = document.createElement('div');
-        summary.style.cssText = "text-align:center; padding:15px; background:rgba(255,255,255,0.05); border-radius:8px; margin-bottom:15px; border:1px solid var(--glass-border);";
-        summary.innerHTML = `
-            <div style="font-size:0.8rem; text-transform:uppercase; color:#94a3b8; letter-spacing:1px;">${titleText}</div>
-            <div style="font-size:2rem; font-weight:bold; color:var(--accent);">
-                ${totalCorrect} <span style="color:#64748b; font-size:1.5rem;">/</span> ${totalAttempts}
-            </div>
-            <div style="font-size:0.9rem; color:${getScoreColor((totalCorrect/totalAttempts)*100)}">
-                ${totalAttempts > 0 ? ((totalCorrect/totalAttempts)*100).toFixed(1) : 0}%
-            </div>
-        `;
-        b.appendChild(summary);
+    // SECTIE 1: SUMMARY
+    const summary = document.createElement('div');
+    summary.style.cssText = "text-align:center; padding:15px; background:rgba(255,255,255,0.05); border-radius:8px; margin-bottom:25px; border:1px solid var(--glass-border);";
+    summary.innerHTML = `
+        <div style="font-size:0.8rem; text-transform:uppercase; color:#94a3b8; letter-spacing:1px;">${titleText}</div>
+        <div style="font-size:2rem; font-weight:bold; color:var(--accent);">
+            ${totalCorrect} <span style="color:#64748b; font-size:1.5rem;">/</span> ${totalAttempts}
+        </div>
+        <div style="font-size:0.9rem; color:${getScoreColor((totalCorrect/totalAttempts)*100)}">
+            ${totalAttempts > 0 ? ((totalCorrect/totalAttempts)*100).toFixed(1) : 0}%
+        </div>
+    `;
+    b.appendChild(summary);
+
+    // SECTIE 2: GROOTSTE COMEBACKS
+    const ranking = getGlobalRankings(); 
+    let comebacks = [];
+    ranking.forEach((item, index) => {
+        if (index < 169 && bottomHistory.includes(item.w)) {
+            comebacks.push({ w: item.w, rank: index + 1 });
+        }
+    });
+    
+    if (comebacks.length > 0) {
+        const comebackDiv = document.createElement('div');
+        comebackDiv.style.marginBottom = "25px";
+        let cbHtml = `
+            <div style="background:rgba(0, 255, 0, 0.05); border:1px solid var(--success); border-radius:8px; padding:10px;">
+                <h3 style="color:var(--success); margin:0 0 5px 0; font-size:1rem;">🏆 Grootste Comebacks (${comebacks.length})</h3>
+                <div style="font-size:0.8rem; color:#aaa; margin-bottom:10px;">Van de bodem naar de top!</div>
+                <table class="rank-table" style="font-size:0.9rem; margin:0;">
+                    <tbody>`;
+        
+        comebacks.forEach(c => {
+            cbHtml += `<tr><td style="border:none;">${c.w}</td><td style="color:var(--gold); text-align:right; border:none;">Nu op #${c.rank}</td></tr>`;
+        });
+        cbHtml += "</tbody></table></div>";
+        comebackDiv.innerHTML = cbHtml;
+        b.appendChild(comebackDiv);
     }
 
+    // SECTIE 3: VAAK VERWARD (VERBETERD & DUIDELIJKER)
+    let mergedConfusions = {};
+    Object.keys(confusionMap).forEach(w1 => {
+        Object.keys(confusionMap[w1]).forEach(w2 => {
+            let pairKey = [w1, w2].sort().join('|');
+            if (!mergedConfusions[pairKey]) mergedConfusions[pairKey] = 0;
+            mergedConfusions[pairKey] += confusionMap[w1][w2];
+        });
+    });
+
+    let confusionList = Object.keys(mergedConfusions).map(key => {
+        let parts = key.split('|');
+        return { w1: parts[0], w2: parts[1], count: mergedConfusions[key] };
+    });
+    confusionList.sort((a, b) => b.count - a.count);
+    
+    if (confusionList.length > 0) {
+        const confDiv = document.createElement('div');
+        // Extra marge onderaan zodat het niet vastplakt aan de hoofdtabel
+        confDiv.style.marginBottom = "30px"; 
+        
+        let confRows = "";
+        confusionList.slice(0, 10).forEach(c => {
+            // We gebruiken padding en uitlijning (right vs left) om ze mooi naar elkaar toe te laten wijzen
+            confRows += `
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                <td style="text-align:right; color:var(--text-main); padding-right:10px; width:45%;">${c.w1}</td>
+                <td style="text-align:center; color:#666; font-size:0.8rem; width:10%;">↔</td>
+                <td style="text-align:left; color:var(--text-main); padding-left:10px; width:45%;">${c.w2}</td>
+                <td style="text-align:right; font-weight:bold; color:var(--danger); width:30px;">${c.count}x</td>
+            </tr>`;
+        });
+
+        if (confusionList.length > 10) {
+            confRows += `<tr><td colspan="4" style="text-align:center; color:#666; font-size:0.8rem; padding:5px;">... en nog ${confusionList.length - 10} paren</td></tr>`;
+        }
+
+        confDiv.innerHTML = `
+            <details style="background:rgba(255, 255, 255, 0.03); border:1px solid #444; border-radius:8px; overflow:hidden;">
+                <summary style="padding:12px 15px; cursor:pointer; font-weight:bold; color:#ff6b6b; display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.2);">
+                    <span>😵 Meest Verwarde Woorden (${confusionList.length})</span>
+                    <span style="font-size:0.8rem; opacity:0.7;">▼</span>
+                </summary>
+                <div style="padding:0;">
+                    <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+                        <thead style="background:rgba(255,255,255,0.05); color:#888; font-size:0.8rem;">
+                            <tr>
+                                <th style="text-align:right; padding:8px;">Woord A</th>
+                                <th></th>
+                                <th style="text-align:left; padding:8px;">Woord B</th>
+                                <th style="text-align:right; padding:8px;">#</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${confRows}
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        `;
+        b.appendChild(confDiv);
+    }
+
+    // SECTIE 4: NORMALE LIJST (TITEL TOEGEVOEGD VOOR DUIDELIJKHEID)
+    const listTitle = document.createElement('h3');
+    listTitle.innerText = "Alle Woorden & Scores";
+    listTitle.style.cssText = "color:var(--text-main); font-size:1rem; margin-bottom:10px; padding-bottom:5px; border-bottom:1px solid #444;";
+    b.appendChild(listTitle);
+
     if (list.length === 0) {
-        b.innerHTML = "<div style='text-align:center; padding:20px; color:#666;'>Geen woorden in deze selectie.</div>";
+        b.innerHTML += "<div style='text-align:center; padding:20px; color:#666;'>Geen woorden in deze selectie.</div>";
     } else {
         const table = document.createElement('table');
         table.className = "rank-table";
@@ -1059,7 +1294,13 @@ function showRanking() {
         const tbody = table.querySelector('tbody');
         
         list.forEach((item, index) => {
-            const row = document.createElement('tr'); row.className = "rank-row";
+            const row = document.createElement('tr'); 
+            row.className = "rank-row";
+            if (typeof showWordDetail === 'function') {
+                row.onclick = () => showWordDetail(item.w);
+                row.style.cursor = "pointer";
+            }
+            
             let rankClass = "";
             if (item.t > 0) {
                 if(index === 0) rankClass = "rank-1";
@@ -1078,6 +1319,7 @@ function showRanking() {
     }
     m.style.display = 'flex';
 }
+
 function getScoreColor(pct) {
     if(pct >= 80) return "var(--success)";
     if(pct >= 50) return "var(--gold)";
