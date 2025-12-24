@@ -179,7 +179,7 @@ input[type="text"]:focus { border-color: var(--accent); box-shadow: 0 0 15px var
 .btn-pass { background: rgba(244, 63, 94, 0.1); color: var(--danger); border: 1px solid var(--danger); }
 .btn-pass:hover { background: var(--danger); color: white; box-shadow: 0 0 15px rgba(244, 63, 94, 0.5); transform: translateY(-2px); }
 
-/* STOP BUTTON (REDESIGNED) */
+/* STOP BUTTON */
 .btn-stop {
     background: transparent;
     color: #64748b;
@@ -198,29 +198,15 @@ input[type="text"]:focus { border-color: var(--accent); box-shadow: 0 0 15px var
     transform: scale(1.05);
 }
 
-/* Flashcard: Toon Antwoord */
+/* Flashcard Buttons */
 .btn-show { background: var(--accent); color: #000; width: 100%; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-.btn-show:hover {
-    background: #22d3ee; /* Lighter cyan */
-    box-shadow: 0 0 20px var(--accent-glow);
-    transform: translateY(-3px);
-}
+.btn-show:hover { background: #22d3ee; box-shadow: 0 0 20px var(--accent-glow); transform: translateY(-3px); }
 
-/* Flashcard: 1. Nog Niet (Fout) */
 .btn-fc-bad { background: var(--danger); color: white; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-.btn-fc-bad:hover {
-    background: #fb7185; /* Lighter red */
-    box-shadow: 0 0 20px rgba(244, 63, 94, 0.6);
-    transform: translateY(-3px);
-}
+.btn-fc-bad:hover { background: #fb7185; box-shadow: 0 0 20px rgba(244, 63, 94, 0.6); transform: translateY(-3px); }
 
-/* Flashcard: 2. Ik Wist Hem (Goed) */
 .btn-fc-good { background: var(--success); color: white; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-.btn-fc-good:hover {
-    background: #34d399; /* Lighter green */
-    box-shadow: 0 0 20px rgba(16, 185, 129, 0.6);
-    transform: translateY(-3px);
-}
+.btn-fc-good:hover { background: #34d399; box-shadow: 0 0 20px rgba(16, 185, 129, 0.6); transform: translateY(-3px); }
 
 .settings-row { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--glass-border); display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; }
 .setting-item { background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; padding: 8px 12px; border-radius: 8px; outline: none; cursor: pointer; font-size: 0.9rem; transition: 0.2s; }
@@ -316,4 +302,24 @@ option { background: #0f172a; }
     50% { transform: translateX(5px); }
     75% { transform: translateX(-5px); }
     100% { transform: translateX(0); }
+}
+
+/* --- RANK CHANGE ANIMATION (NIEUW) --- */
+.rank-change-popup {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 3rem; /* Iets groter gemaakt voor duidelijkheid */
+    font-weight: 900;
+    pointer-events: none;
+    z-index: 9999; /* Hier was het te laag */
+    text-shadow: 0 4px 15px rgba(0,0,0,0.8); /* Betere schaduw */
+    animation: floatUp 1.5s forwards ease-out;
+}
+
+@keyframes floatUp {
+    0% { opacity: 0; transform: translate(-50%, -20%) scale(0.5); }
+    20% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+    100% { opacity: 0; transform: translate(-50%, -150%) scale(1); }
 }

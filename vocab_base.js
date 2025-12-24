@@ -59,7 +59,7 @@ const vocabDatabase = [
     // 25
     {id: 25, w: "to outlaw", d: "To make something illegal or unacceptable", u: 8},
     // 26
-    {id: 26, w: "deep packet inspection", d: "Method of examining the content of data packets as they pass by a checkpoint; used for censorship or security", u: 8},
+    {id: 26, w: "deep packet inspection", d: "Analyzing the actual content of network data", u: 8},
     // 27
     {id: 27, w: "endorsement", d: "The act of saying that you approve of or support something or someone", u: 8},
     // 28
@@ -235,7 +235,7 @@ const vocabDatabase = [
     // 110
     {id: 110, w: "social engineering", d: "The use of deception to manipulate individuals into divulging confidential information", u: 10},
     // 111
-    {id: 111, w: "breached credential checking", d: "When credential stuffing occurs you can check whether you have been impacted", u: 10},
+    {id: 111, w: "breached credential checking", d: "Verifying if login details appear in lists of stolen data", u: 10},
     // 112
     {id: 112, w: "doxing", d: "The action of finding or publishing private information about someone on the internet without permission", u: 10},
     // 113
@@ -455,7 +455,7 @@ const vocabDatabase = [
     // 217
     {id: 217, w: "to validate", d: "To confirm or prove the accuracy, reliability, or legitimacy of something", u: 12},
     // 218
-    {id: 218, w: "to exemplify", d: "To provide examples that typify or represent a concept or idea", u: 12},
+    {id: 218, w: "to exemplify", d: "To be a typical representation of something", u: 12},
     // 219
     {id: 219, w: "to justify", d: "To provide reasons or evidence to defend or explain a decision or argument", u: 12},
     // 220
